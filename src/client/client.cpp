@@ -125,6 +125,8 @@ int main(int argc, char const *argv[])
     DisplayCerts(ssl);
     const char *chars = "Hello World, 123!";
     SSL_write(ssl, chars, strlen(chars));
+    for (;;) {
+    }
     SSL_free(ssl);
     close(sfd);
     SSL_CTX_free(ctx);
