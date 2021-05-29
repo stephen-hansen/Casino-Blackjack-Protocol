@@ -68,11 +68,8 @@ PDU* parse_pdu_server(SSL* ssl) {
          if ((rc = SSL_read(ssl, message_buf, 4)) <= 0) {
             return pdu;
          }
-         Version v;
-         v.category_code = 0;
-         v.command_code = 0;
-         v.version = *reinterpret_cast<uint32_t*>(message_buf);
-         pdu = new VersionPDU(v);
+         uint32_t version = *reinterpret_cast<uint32_t*>(message_buf);
+         pdu = new VersionPDU(version);
       } else if (command_code == 1) { // USER
          char message_buf[34];
          int i = 0;
@@ -91,7 +88,7 @@ PDU* parse_pdu_server(SSL* ssl) {
             // Terminate the message buffer
             message_buf[i+1] = '\0';
             // Convert to string, create pdu
-            pdu = new UserPDU(*header, std::string(message_buf));
+            pdu = new UserPDU(std::string(message_buf));
          }
       } else if (command_code == 2) { // PASS
          char message_buf[34];
@@ -111,25 +108,22 @@ PDU* parse_pdu_server(SSL* ssl) {
             // Terminate the message buffer
             message_buf[i+1] = '\0';
             // Convert to string, create pdu
-            pdu = new PassPDU(*header, std::string(message_buf));
+            pdu = new PassPDU(std::string(message_buf));
          }
       } else if (command_code == 3) { // GETBALANCE
          // No additional parsing necessary
-         pdu = new GetBalancePDU(*header);
+         pdu = new GetBalancePDU();
       } else if (command_code == 4) { // UPDATEBALANCE
          char message_buf[4];
          // Read in the funds
          if ((rc = SSL_read(ssl, message_buf, 4)) <= 0) {
             return pdu;
          }
-         UpdateBalance u;
-         u.category_code = 0;
-         u.command_code = 4;
-         u.funds = *reinterpret_cast<uint32_t*>(message_buf);
-         pdu = new UpdateBalancePDU(u);
+         uint32_t funds = *reinterpret_cast<uint32_t*>(message_buf);
+         pdu = new UpdateBalancePDU(funds);
       } else if (command_code == 5) { // QUIT
          // No additional parsing necessary
-         pdu = new QuitPDU(*header);
+         pdu = new QuitPDU();
       }
    } else if (category_code == 1) { // Blackjack
       if (command_code == 0) { // GETTABLES

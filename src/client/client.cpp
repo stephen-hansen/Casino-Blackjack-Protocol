@@ -127,37 +127,66 @@ int main(int argc, char const *argv[])
    printf("Connected with %s encryption\n", SSL_get_cipher(ssl));
    DisplayCerts(ssl);
    // Send VERSION on connection
-   Version v;
-   v.category_code = 0;
-   v.command_code = 0;
-   v.version = htonl(1); // Version 1, over big endian
-   VersionPDU *version_pdu = new VersionPDU(v);
+   uint32_t version = htonl(1); // Version 1, over big endian
+   VersionPDU *version_pdu = new VersionPDU(version);
    ssize_t len = version_pdu->to_bytes(&write_buffer);
    SSL_write(ssl, write_buffer, len);
+   delete version_pdu;
    for (std::string line; std::getline(std::cin, line);) {
       std::istringstream iss(line);
       std::vector<std::string> tokens;
       std::copy(std::istream_iterator<std::string>(iss), std::istream_iterator<std::string>(), std::back_inserter(tokens));
       if (tokens.size() < 1) {
-         std::cout << "expected: <command> (<arguments>)" << std::endl;
+         std::cout << "expected: <command> (<arg1> <arg2> <arg3> ...)" << std::endl;
          continue;
       }
       std::string command = tokens[0];
       if (command == "user") {
          if (tokens.size() == 2) {
             std::cout << "sending username" << std::endl;
-            Header h;
-            h.category_code = 0;
-            h.command_code = 1;
             std::string username = tokens[1];
             username.append("\n");
-            std::cout << username << std::endl;
-            UserPDU *user_pdu = new UserPDU(h, username);
+            UserPDU *user_pdu = new UserPDU(username);
             ssize_t len = user_pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
+            delete user_pdu;
          } else {
             std::cout << "expected: user <username>" << std::endl;
          }
+      } else if (command == "pass") {
+         if (tokens.size() == 2) {
+            std::cout << "sending password" << std::endl;
+            std::string password = tokens[1];
+            password.append("\n");
+            PassPDU *pass_pdu = new PassPDU(password);
+            ssize_t len = pass_pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+            delete pass_pdu;
+         } else {
+            std::cout << "expected: pass <password>" << std::endl;
+         }
+      } else if (command == "getbalance") {
+         if (tokens.size() == 1) {
+            std::cout << "requesting balance" << std::endl;
+
+         } else {
+            std::cout << "expected: getbalance" << std::endl;
+         }
+      } else if (command == "updatebalance") {
+      } else if (command == "quit") {
+      } else if (command == "gettables") {
+      } else if (command == "addtable") {
+      } else if (command == "removetable") {
+      } else if (command == "jointable") {
+      } else if (command == "leavetable") {
+      } else if (command == "bet") {
+      } else if (command == "insurance") {
+      } else if (command == "hit") {
+      } else if (command == "stand") {
+      } else if (command == "doubledown") {
+      } else if (command == "split") {
+      } else if (command == "surrender") {
+      } else if (command == "chat") {
       } else {
          std::cout << "Invalid command" << std::endl;
       }

@@ -111,8 +111,10 @@ class VersionPDU: public PDU
    private:
       Version details;
    public:
-      VersionPDU(Version v) {
-         details = v;
+      VersionPDU(uint32_t version) {
+         details.category_code = 0;
+         details.command_code = 0;
+         details.version = version;
       }
       uint32_t getVersion() {
          return ntohl(details.version); 
@@ -129,8 +131,9 @@ class UserPDU: public PDU
       Header header;
       std::string username;
    public:
-      UserPDU(Header h, std::string user) {
-         header = h;
+      UserPDU(std::string user) {
+         header.category_code = 0;
+         header.command_code = 1;
          username = user;
       }
       std::string getUsername() {
@@ -149,8 +152,9 @@ class PassPDU: public PDU
       Header header;
       std::string password;
    public:
-      PassPDU(Header h, std::string pass) {
-         header = h;
+      PassPDU(std::string pass) {
+         header.category_code = 0;
+         header.command_code = 2;
          password = pass;
       }
       std::string getPassword() {
@@ -168,8 +172,9 @@ class GetBalancePDU: public PDU
    private:
       Header header;
    public:
-      GetBalancePDU(Header h) {
-         header = h;
+      GetBalancePDU() {
+         header.category_code = 0;
+         header.command_code = 3;
       }
       ssize_t to_bytes(char** buf) {
          memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
@@ -182,8 +187,10 @@ class UpdateBalancePDU: public PDU
    private:
       UpdateBalance details;
    public:
-      UpdateBalancePDU(UpdateBalance u) {
-         details = u;
+      UpdateBalancePDU(uint32_t funds) {
+         details.category_code = 0;
+         details.command_code = 4;
+         details.funds = funds;
       }
       uint32_t getFunds() {
          return ntohl(details.funds); 
@@ -199,8 +206,9 @@ class QuitPDU: public PDU
    private:
       Header header;
    public:
-      QuitPDU(Header h) {
-         header = h;
+      QuitPDU() {
+         header.category_code = 0;
+         header.command_code = 5;
       }
       ssize_t to_bytes(char** buf) {
          memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
