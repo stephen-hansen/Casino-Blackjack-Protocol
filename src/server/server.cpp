@@ -16,7 +16,6 @@
 
 #include "server.h"
 #include "../protocol/dfa.h"
-#include "../protocol/pdu.h"
 
 #define MAX_STR_LEN 1028
 
@@ -245,6 +244,7 @@ static void connection_handler()
          // Accept whatever the username is, move to PASSWORD
          username = user_pdu->getUsername();
          curr_state = PASSWORD;
+         std::cout << "Waiting for password" << std::endl;
       } else if (curr_state == PASSWORD) {
          PassPDU* pass_pdu = dynamic_cast<PassPDU*>(p);
          if (!pass_pdu) {

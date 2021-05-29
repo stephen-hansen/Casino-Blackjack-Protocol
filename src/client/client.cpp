@@ -102,7 +102,7 @@ void DisplayCerts(SSL *ssl)
 
 int main(int argc, char const *argv[])
 {
-   char * write_buffer;
+   char * write_buffer = (char*)malloc(4096);
    SSL_CTX *ctx = InitSSL_CTX();
    SSL *ssl = SSL_new(ctx);
    if (ssl == nullptr)
@@ -139,9 +139,28 @@ int main(int argc, char const *argv[])
       std::vector<std::string> tokens;
       std::copy(std::istream_iterator<std::string>(iss), std::istream_iterator<std::string>(), std::back_inserter(tokens));
       if (tokens.size() < 1) {
+         std::cout << "expected: <command> (<arguments>)" << std::endl;
          continue;
       }
       std::string command = tokens[0];
+      if (command == "user") {
+         if (tokens.size() == 2) {
+            std::cout << "sending username" << std::endl;
+            Header h;
+            h.category_code = 0;
+            h.command_code = 1;
+            std::string username = tokens[1];
+            username.append("\n");
+            std::cout << username << std::endl;
+            UserPDU *user_pdu = new UserPDU(h, username);
+            ssize_t len = user_pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+         } else {
+            std::cout << "expected: user <username>" << std::endl;
+         }
+      } else {
+         std::cout << "Invalid command" << std::endl;
+      }
    }
    SSL_free(ssl);
    close(sfd);

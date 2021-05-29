@@ -118,8 +118,8 @@ class VersionPDU: public PDU
          return ntohl(details.version); 
       }
       ssize_t to_bytes(char** buf) {
-         *buf = reinterpret_cast<char*>(&details);
-         return 6;
+         memcpy((void*)*buf, reinterpret_cast<void*>(&details), sizeof(Version));
+         return sizeof(Version);
       }
 };
 
@@ -137,9 +137,9 @@ class UserPDU: public PDU
          return username.substr(0, username.length()-1); // Do not count \n in username 
       }
       ssize_t to_bytes(char** buf) {
-         std::string bytes = (char)(header.category_code) + ((char)(header.command_code) + username);
-         *buf = const_cast<char*>(bytes.c_str());
-         return 2 + username.length();
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
+         username.copy(*buf+sizeof(Header), username.length());
+         return sizeof(Header) + username.length();
       }
 };
 
@@ -157,9 +157,9 @@ class PassPDU: public PDU
          return password.substr(0, password.length()-1); // Do not count \n in password 
       }
       ssize_t to_bytes(char** buf) {
-         std::string bytes = (char)(header.category_code) + ((char)(header.command_code) + password);
-         *buf = const_cast<char*>(bytes.c_str());
-         return 2 + password.length();
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
+         password.copy(*buf+sizeof(Header), password.length());
+         return sizeof(Header) + password.length();
       }
 };
 
@@ -172,8 +172,8 @@ class GetBalancePDU: public PDU
          header = h;
       }
       ssize_t to_bytes(char** buf) {
-         *buf = reinterpret_cast<char*>(&header);
-         return 2;
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
+         return sizeof(Header);
       }
 };
 
@@ -189,8 +189,8 @@ class UpdateBalancePDU: public PDU
          return ntohl(details.funds); 
       }
       ssize_t to_bytes(char** buf) {
-         *buf = reinterpret_cast<char*>(&details);
-         return 6;
+         memcpy((void*)*buf, reinterpret_cast<void*>(&details), sizeof(UpdateBalance));
+         return sizeof(UpdateBalance);
       }
 };
 
@@ -203,112 +203,8 @@ class QuitPDU: public PDU
          header = h;
       }
       ssize_t to_bytes(char** buf) {
-         *buf = reinterpret_cast<char*>(&header);
-         return 2;
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
+         return sizeof(Header);
       }
 };
-
-PDU* parse_pdu_server(SSL* ssl) {
-   ssize_t rc = 0;
-   char header_buf[2];
-   Header* header;
-   PDU* pdu = NULL;
-
-   // Read in the 2 byte header
-   if ((rc = SSL_read(ssl, header_buf, 2)) <= 0) {
-      return pdu;
-   }
-   header = reinterpret_cast<Header*>(header_buf);
-   uint8_t category_code = header->category_code;
-   uint8_t command_code = header->command_code;
-   if (category_code == 0) { // General usage
-      if (command_code == 0) { // VERSION
-         char message_buf[4];
-         // Read in the version number
-         if ((rc = SSL_read(ssl, message_buf, 4)) <= 0) {
-            return pdu;
-         }
-         Version v;
-         v.category_code = 0;
-         v.command_code = 0;
-         v.version = *reinterpret_cast<uint32_t*>(message_buf);
-         pdu = new VersionPDU(v);
-      } else if (command_code == 1) { // USER
-         char message_buf[34];
-         int i = 0;
-         char c = '\0';
-         while ((rc = SSL_read(ssl, &c, 1) > 0)) {
-            message_buf[i] = c;
-            i++;
-            if (c == '\n') {
-               break;
-            } else if (i == 33) {
-               break;
-            }
-         }
-         // Successful message ends in \n and is at least 9 char long
-         if (c == '\n' && i >= 9) {
-            // Terminate the message buffer
-            message_buf[i+1] = '\0';
-            // Convert to string, create pdu
-            pdu = new UserPDU(*header, std::string(message_buf));
-         }
-      } else if (command_code == 2) { // PASS
-         char message_buf[34];
-         int i = 0;
-         char c = '\0';
-         while ((rc = SSL_read(ssl, &c, 1) > 0)) {
-            message_buf[i] = c;
-            i++;
-            if (c == '\n') {
-               break;
-            } else if (i == 33) {
-               break;
-            }
-         }
-         // Successful message ends in \n and is at least 9 char long
-         if (c == '\n' && i >= 9) {
-            // Terminate the message buffer
-            message_buf[i+1] = '\0';
-            // Convert to string, create pdu
-            pdu = new PassPDU(*header, std::string(message_buf));
-         }
-      } else if (command_code == 3) { // GETBALANCE
-         // No additional parsing necessary
-         pdu = new GetBalancePDU(*header);
-      } else if (command_code == 4) { // UPDATEBALANCE
-         char message_buf[4];
-         // Read in the funds
-         if ((rc = SSL_read(ssl, message_buf, 4)) <= 0) {
-            return pdu;
-         }
-         UpdateBalance u;
-         u.category_code = 0;
-         u.command_code = 4;
-         u.funds = *reinterpret_cast<uint32_t*>(message_buf);
-         pdu = new UpdateBalancePDU(u);
-      } else if (command_code == 5) { // QUIT
-         // No additional parsing necessary
-         pdu = new QuitPDU(*header);
-      }
-   } else if (category_code == 1) { // Blackjack
-      if (command_code == 0) { // GETTABLES
-      } else if (command_code == 1) { // ADDTABLE
-      } else if (command_code == 2) { // REMOVETABLE
-      } else if (command_code == 3) { // JOINTABLE
-      } else if (command_code == 4) { // LEAVETABLE
-      } else if (command_code == 5) { // BET
-      } else if (command_code == 6) { // INSURANCE
-      } else if (command_code == 7) { // HIT
-      } else if (command_code == 8) { // STAND
-      } else if (command_code == 9) { // DOUBLEDOWN
-      } else if (command_code == 10) { // SPLIT
-      } else if (command_code == 11) { // SURRENDER
-      } else if (command_code == 12) { // CHAT
-      }
-   }
-   return pdu;
-}
-
-//ParseResponse parse_pdu_client(SSL* ssl, char* buf, size_t buf_len);
 
