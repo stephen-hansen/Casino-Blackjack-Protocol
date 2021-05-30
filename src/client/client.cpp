@@ -176,6 +176,16 @@ int main(int argc, char const *argv[])
             std::cout << "expected: getbalance" << std::endl;
          }
       } else if (command == "updatebalance") {
+         if (tokens.size() == 2) {
+            std::string funds_str = tokens[1];
+            int32_t funds = stoi(funds_str);
+            UpdateBalancePDU *ub_pdu = new UpdateBalancePDU(htonl(funds));
+            ssize_t len = ub_pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+            delete ub_pdu;
+         } else {
+            std::cout << "expected: updatebalance <funds>" << std::endl;
+         }
       } else if (command == "quit") {
          if (tokens.size() == 1) {
             QuitPDU *quit_pdu = new QuitPDU();

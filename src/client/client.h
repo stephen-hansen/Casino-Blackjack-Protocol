@@ -95,9 +95,21 @@ void listen_to_server(SSL* ssl) {
    for (;;) {
       PDU * p = parse_pdu_client(ssl);
       // Check for ASCII response, valid at any state
-      ASCIIResponsePDU* ascii_response_pdu = dynamic_cast<ASCIIResponsePDU*>(p);
-      if (ascii_response_pdu) {
-         std::cout << "server: " << ascii_response_pdu->getBody();
+      ASCIIResponsePDU* ar_pdu = dynamic_cast<ASCIIResponsePDU*>(p);
+      if (ar_pdu) {
+         std::string body = ar_pdu->getBody();
+         std::cout << "server message: " << body.substr(0,body.length()-1);
+         continue;
+      }
+      VersionResponsePDU* vr_pdu = dynamic_cast<VersionResponsePDU*>(p);
+      if (vr_pdu) {
+         std::cout << "server version=" << vr_pdu->getVersion() << "\n";
+         continue;
+      }
+      BalanceResponsePDU* br_pdu = dynamic_cast<BalanceResponsePDU*>(p);
+      if (br_pdu) {
+         std::cout << "current balance=" << br_pdu->getBalance() << "\n";
+         continue;
       }
    }
 }

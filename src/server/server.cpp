@@ -217,7 +217,7 @@ static void connection_handler()
          VersionPDU* version_pdu = dynamic_cast<VersionPDU*>(p);
          if (!version_pdu) {
             // Send error, close connection
-            VersionResponsePDU *pdu = new VersionResponsePDU(5, 0, 1, server_version);
+            VersionResponsePDU *pdu = new VersionResponsePDU(5, 0, 1, htonl(server_version));
             ssize_t len = pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
             break;
@@ -225,13 +225,13 @@ static void connection_handler()
          uint32_t client_version = version_pdu->getVersion();
          if (client_version == server_version) {
             // Supported, send 2-0-1 and move to USERNAME
-            VersionResponsePDU *pdu = new VersionResponsePDU(2, 0, 1, server_version);
+            VersionResponsePDU *pdu = new VersionResponsePDU(2, 0, 1, htonl(server_version));
             ssize_t len = pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
             curr_state = USERNAME;
          } else {
             // Not supported. Send error, close connection
-            VersionResponsePDU *pdu = new VersionResponsePDU(5, 0, 1, server_version);
+            VersionResponsePDU *pdu = new VersionResponsePDU(5, 0, 1, htonl(server_version));
             ssize_t len = pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
             break;

@@ -56,7 +56,7 @@ bool handle_getbalance(PDU* p, SSL* conn) {
       return false;
    }
    // Send the balance
-   BalanceResponsePDU* rpdu = new BalanceResponsePDU(2, 0, 3, user_info[conn_to_user[conn]]->getBalance());
+   BalanceResponsePDU* rpdu = new BalanceResponsePDU(2, 0, 3, htonl(user_info[conn_to_user[conn]]->getBalance()));
    ssize_t len = rpdu->to_bytes(&write_buffer);
    SSL_write(conn, write_buffer, len);
    return true;
