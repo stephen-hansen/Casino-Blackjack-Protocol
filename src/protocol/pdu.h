@@ -269,7 +269,7 @@ class RemoveTablePDU: public PDU
          details.table_id = tid;
       }
       uint16_t getTableID() {
-         return ntohl(details.table_id); 
+         return ntohs(details.table_id); 
       }
       ssize_t to_bytes(char** buf) {
          memcpy((void*)*buf, reinterpret_cast<void*>(&details), sizeof(RemoveTable));
@@ -288,7 +288,7 @@ class JoinTablePDU: public PDU
          details.table_id = tid;
       }
       uint16_t getTableID() {
-         return ntohl(details.table_id); 
+         return ntohs(details.table_id); 
       }
       ssize_t to_bytes(char** buf) {
          memcpy((void*)*buf, reinterpret_cast<void*>(&details), sizeof(JoinTable));
@@ -614,7 +614,7 @@ class AddTableResponsePDU: public PDU
          return details.reply_code_3;
       }
       uint16_t getTableID() {
-         return ntohl(details.table_id);
+         return ntohs(details.table_id);
       }
       ssize_t to_bytes(char** buf) {
          memcpy((void*)*buf, reinterpret_cast<void*>(&details), sizeof(AddTableResponse));

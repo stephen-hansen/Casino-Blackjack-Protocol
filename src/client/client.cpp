@@ -112,8 +112,15 @@ int main(int argc, char const *argv[])
       exit(EXIT_FAILURE);
    }
 
-   //Host is hardcoded to localhost for testing purposes
-   const int sfd = OpenConnection("127.0.0.1", argv[1]);
+   const char * port_number = "21210";
+   if (argc == 3) {
+      port_number = argv[2];
+   } else if (argc != 2) {
+      fprintf(stderr, "Expected arguments <hostname/ip> (<port>)");
+      exit(EXIT_FAILURE);
+   }
+
+   const int sfd = OpenConnection(argv[1], port_number);
    SSL_set_fd(ssl, sfd);
 
    const int status = SSL_connect(ssl);
@@ -211,7 +218,7 @@ int main(int argc, char const *argv[])
          if (tokens.size() == 2) {
             std::string id_str = tokens[1];
             uint16_t id = stoi(id_str);
-            RemoveTablePDU *rt_pdu = new RemoveTablePDU(htonl(id));
+            RemoveTablePDU *rt_pdu = new RemoveTablePDU(htons(id));
             ssize_t len = rt_pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
             delete rt_pdu;
@@ -222,7 +229,7 @@ int main(int argc, char const *argv[])
          if (tokens.size() == 2) {
             std::string id_str = tokens[1];
             uint16_t id = stoi(id_str);
-            JoinTablePDU *jt_pdu = new JoinTablePDU(htonl(id));
+            JoinTablePDU *jt_pdu = new JoinTablePDU(htons(id));
             ssize_t len = jt_pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
             delete jt_pdu;
