@@ -291,7 +291,6 @@ static void connection_handler()
             for (std::map<uint16_t, TableDetails*>::iterator it = tables.begin(); it != tables.end(); it++) {
                uint16_t tid = it->first;
                std::string settings = it->second->to_string();
-               std::cout << settings << std::endl;
                TabledataPDU* td = new TabledataPDU(htonl(tid), settings);
                tabledata.push_back(td);
             }

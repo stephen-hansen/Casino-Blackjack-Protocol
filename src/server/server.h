@@ -64,17 +64,17 @@ class TableDetails
          // TODO fix ascii encoding of numbers
          std::string out = "";
          out += "max-players:";
-         out += (int)max_players;
+         out += std::to_string(max_players);
          out += "\nnumber-decks:";
-         out += (int)number_decks;
+         out += std::to_string(number_decks);
          out += "\npayoff:";
-         out += (int)payoff_high;
+         out += std::to_string(payoff_high);
          out += "-";
-         out += (int)payoff_low;
+         out += std::to_string(payoff_low);
          out += "\nbet-limits:";
-         out += (int)bet_min;
+         out += std::to_string(bet_min);
          out += "-";
-         out += (int)bet_max;
+         out += std::to_string(bet_max);
          out += "\nhit-soft-17:";
          if (hit_soft_17) {
             out += "true";
