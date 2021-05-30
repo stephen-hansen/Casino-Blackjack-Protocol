@@ -5,8 +5,68 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
+#include <map>
+#include <mutex>
+#include <vector>
 
 #include "../protocol/pdu.h"
+
+std::map<std::string, std::string> auth_credentials = {{"foo", "bar"}, {"sph77", "admin"}};
+
+class AccountDetails
+{
+   private:
+      std::mutex mtx;
+      uint32_t balance;
+   public:
+      AccountDetails() {
+         balance = 0;
+      }
+      uint32_t getBalance() {
+         return balance;
+      }
+      void adjustBalance(int32_t funds) {
+         mtx.lock();
+         uint32_t new_balance = balance + funds;
+         bool overflow = (((funds < 0) && (new_balance > balance)) || ((funds > 0) && (new_balance < balance)));
+         if (!overflow) {
+            balance += funds;
+         }
+         mtx.unlock();
+      }
+};
+
+std::map<std::string, AccountDetails*> user_info;
+
+class TableDetails
+{
+   private:
+      std::mutex mtx;
+      std::vector<SSL*> players;
+      std::vector<SSL*> pending_players;
+   public:
+      TableDetails() {}
+};
+
+bool handle_getbalance(PDU* p) {
+   GetBalancePDU* pdu = dynamic_cast<GetBalancePDU*>(p);
+   if (!pdu) {
+      return false;
+   }
+   // TODO send the response
+   return true;
+}
+
+bool handle_updatebalance(PDU* p, std::string username) {
+   UpdateBalancePDU* pdu = dynamic_cast<UpdateBalancePDU*>(p);
+   if (!pdu) {
+      return false;
+   }
+   int32_t funds = pdu->getFunds();
+   user_info[username]->adjustBalance(funds);
+   // TODO send the response
+   return true;
+}
 
 int setup_socket(short port)
 {
@@ -119,7 +179,7 @@ PDU* parse_pdu_server(SSL* ssl) {
          if ((rc = SSL_read(ssl, message_buf, 4)) <= 0) {
             return pdu;
          }
-         uint32_t funds = *reinterpret_cast<uint32_t*>(message_buf);
+         int32_t funds = *reinterpret_cast<int32_t*>(message_buf);
          pdu = new UpdateBalancePDU(funds);
       } else if (command_code == 5) { // QUIT
          // No additional parsing necessary

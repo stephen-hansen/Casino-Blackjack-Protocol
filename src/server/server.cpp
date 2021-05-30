@@ -36,9 +36,6 @@ int socket_listen = -1;
 int socket_conn = -1;
 uint32_t server_version = 1;
 SSL_CTX* ssl_ctx;
-
-std::map<std::string, std::string> auth_credentials = {{"foo", "bar"}, {"sph77", "admin"}};
-
 /* main entry point */
 int main(int argc, char* argv[])
 {
@@ -199,7 +196,7 @@ static void connection_handler()
    STATE curr_state = VERSION;
    std::string username = "";
    std::string password = "";
-   char * write_buffer;
+   char * write_buffer = (char *)malloc(4096);
 
    /* handle connections */
    for (;;)
@@ -221,17 +218,23 @@ static void connection_handler()
          VersionPDU* version_pdu = dynamic_cast<VersionPDU*>(p);
          if (!version_pdu) {
             // Send error, close connection
-            std::cout << "Invalid PDU sent for VERSION, closing connection" << std::endl;
+            VersionResponsePDU *pdu = new VersionResponsePDU(5, 0, 1, server_version);
+            ssize_t len = pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
             break;
          }
          uint32_t client_version = version_pdu->getVersion();
          if (client_version == server_version) {
             // Supported, send 2-0-1 and move to USERNAME
-            std::cout << "Received VERSION, VERSION is supported" << std::endl;
+            VersionResponsePDU *pdu = new VersionResponsePDU(2, 0, 1, server_version);
+            ssize_t len = pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
             curr_state = USERNAME;
          } else {
-            std::cout << "Received VERSION, VERSION is not supported" << std::endl;
             // Not supported. Send error, close connection
+            VersionResponsePDU *pdu = new VersionResponsePDU(5, 0, 1, server_version);
+            ssize_t len = pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
             break;
          }
       } else if (curr_state == USERNAME) {
@@ -262,10 +265,17 @@ static void connection_handler()
          } else {
             // Valid login; proceed to ACCOUNT, send 2-0-2
             std::cout << "Valid credentials" << std::endl;
+            // Initialize balance
+            user_info[username] = new AccountDetails();
             curr_state = ACCOUNT;
          }
       } else if (curr_state == ACCOUNT) {
-         // TODO
+         if (handle_getbalance(p)) {
+            continue;
+         }
+         if (handle_updatebalance(p, username)) {
+            continue;
+         }
       }
    }
 

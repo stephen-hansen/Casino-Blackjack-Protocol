@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #pragma pack(push, 1)
 
@@ -20,7 +21,7 @@ struct Version {
 struct UpdateBalance {
    uint8_t category_code;
    uint8_t command_code;
-   uint32_t funds;
+   int32_t funds;
 };
 
 struct RemoveTable {
@@ -81,7 +82,12 @@ struct AddTableResponse {
    uint16_t table_id;
 };
 
-struct CardHandResponse {
+struct Card {
+   char rank;
+   char suit;
+};
+
+struct CardHandResponseHeader {
    uint8_t reply_code_1;
    uint8_t reply_code_2;
    uint8_t reply_code_3;
@@ -187,12 +193,12 @@ class UpdateBalancePDU: public PDU
    private:
       UpdateBalance details;
    public:
-      UpdateBalancePDU(uint32_t funds) {
+      UpdateBalancePDU(int32_t funds) {
          details.category_code = 0;
          details.command_code = 4;
          details.funds = funds;
       }
-      uint32_t getFunds() {
+      int32_t getFunds() {
          return ntohl(details.funds); 
       }
       ssize_t to_bytes(char** buf) {
@@ -213,6 +219,312 @@ class QuitPDU: public PDU
       ssize_t to_bytes(char** buf) {
          memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
          return sizeof(Header);
+      }
+};
+
+class ASCIIResponsePDU: public PDU
+{
+   private:
+      ResponseHeader header;
+      std::string body;
+   public:
+      ASCIIResponsePDU(uint8_t rc_1, uint8_t rc_2, uint8_t rc_3, std::string b) {
+         header.reply_code_1 = rc_1;
+         header.reply_code_2 = rc_2;
+         header.reply_code_3 = rc_3;
+         body = b;
+      }
+      uint8_t getReplyCode1() {
+         return header.reply_code_1;
+      }
+      uint8_t getReplyCode2() {
+         return header.reply_code_2;
+      }
+      uint8_t getReplyCode3() {
+         return header.reply_code_3;
+      }
+      std::string getBody() {
+         return body;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(ResponseHeader));
+         body.copy(*buf+sizeof(ResponseHeader), body.length());
+         return sizeof(ResponseHeader) + body.length();
+      }
+};
+
+class VersionResponsePDU: public PDU
+{
+   private:
+      VersionResponse details;
+   public:
+      VersionResponsePDU(uint8_t rc_1, uint8_t rc_2, uint8_t rc_3, uint32_t v) {
+         details.reply_code_1 = rc_1;
+         details.reply_code_2 = rc_2;
+         details.reply_code_3 = rc_3;
+         details.version = v;
+      }
+      uint8_t getReplyCode1() {
+         return details.reply_code_1;
+      }
+      uint8_t getReplyCode2() {
+         return details.reply_code_2;
+      }
+      uint8_t getReplyCode3() {
+         return details.reply_code_3;
+      }
+      uint32_t getVersion() {
+         return ntohl(details.version);
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&details), sizeof(VersionResponse));
+         return sizeof(VersionResponse);
+      }
+};
+
+class BalanceResponsePDU: public PDU
+{
+   private:
+      BalanceResponse details;
+   public:
+      BalanceResponsePDU(uint8_t rc_1, uint8_t rc_2, uint8_t rc_3, uint32_t b) {
+         details.reply_code_1 = rc_1;
+         details.reply_code_2 = rc_2;
+         details.reply_code_3 = rc_3;
+         details.balance = b;
+      }
+      uint8_t getReplyCode1() {
+         return details.reply_code_1;
+      }
+      uint8_t getReplyCode2() {
+         return details.reply_code_2;
+      }
+      uint8_t getReplyCode3() {
+         return details.reply_code_3;
+      }
+      uint32_t getBalance() {
+         return ntohl(details.balance);
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&details), sizeof(BalanceResponse));
+         return sizeof(BalanceResponse);
+      }
+};
+
+class TabledataPDU: public PDU
+{
+   private:
+      uint16_t table_id;
+      std::string settings;
+   public:
+      TabledataPDU(uint16_t tid, std::string s) {
+         table_id = tid;
+         settings = s;
+      }
+      uint16_t getTableID() {
+         return table_id;
+      }
+      std::string getSettings() {
+         return settings;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&table_id), sizeof(uint16_t));
+         settings.copy(*buf+sizeof(uint16_t), settings.length());
+         return sizeof(uint16_t) + settings.length();
+      }
+};
+
+class ListTablesResponsePDU: public PDU
+{
+   private:
+      ListTablesResponseHeader header;
+      std::vector<TabledataPDU*> tabledata;
+   public:
+      ListTablesResponsePDU(uint8_t rc_1, uint8_t rc_2, uint8_t rc_3, std::vector<TabledataPDU*> td) {
+         header.reply_code_1 = rc_1;
+         header.reply_code_2 = rc_2;
+         header.reply_code_3 = rc_3;
+         header.number_of_tables = td.size();
+         tabledata = td;
+      }
+      uint8_t getReplyCode1() {
+         return header.reply_code_1;
+      }
+      uint8_t getReplyCode2() {
+         return header.reply_code_2;
+      }
+      uint8_t getReplyCode3() {
+         return header.reply_code_3;
+      }
+      std::vector<TabledataPDU*> getTabledata() {
+         return tabledata;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(ListTablesResponseHeader));
+         ssize_t total_len = sizeof(ListTablesResponseHeader);
+         for (auto data : tabledata) {
+            char* write_at_buf = *buf+total_len;
+            total_len += data->to_bytes(&write_at_buf);
+         }
+         return total_len;
+      }
+};
+
+class AddTableResponsePDU: public PDU
+{
+   private:
+      AddTableResponse details;
+   public:
+      AddTableResponsePDU(uint8_t rc_1, uint8_t rc_2, uint8_t rc_3, uint16_t tid) {
+         details.reply_code_1 = rc_1;
+         details.reply_code_2 = rc_2;
+         details.reply_code_3 = rc_3;
+         details.table_id = tid;
+      }
+      uint8_t getReplyCode1() {
+         return details.reply_code_1;
+      }
+      uint8_t getReplyCode2() {
+         return details.reply_code_2;
+      }
+      uint8_t getReplyCode3() {
+         return details.reply_code_3;
+      }
+      uint16_t getTableID() {
+         return ntohl(details.table_id);
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&details), sizeof(AddTableResponse));
+         return sizeof(AddTableResponse);
+      }
+};
+
+class JoinTableResponsePDU: public PDU
+{
+   private:
+      ResponseHeader header;
+      std::string settings;
+   public:
+      JoinTableResponsePDU(uint8_t rc_1, uint8_t rc_2, uint8_t rc_3, std::string s) {
+         header.reply_code_1 = rc_1;
+         header.reply_code_2 = rc_2;
+         header.reply_code_3 = rc_3;
+         settings = s;
+      }
+      uint8_t getReplyCode1() {
+         return header.reply_code_1;
+      }
+      uint8_t getReplyCode2() {
+         return header.reply_code_2;
+      }
+      uint8_t getReplyCode3() {
+         return header.reply_code_3;
+      }
+      std::string getSettings() {
+         return settings;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(ResponseHeader));
+         settings.copy(*buf+sizeof(ResponseHeader), settings.length());
+         return sizeof(ResponseHeader) + settings.length();
+      }
+};
+
+class CardPDU: public PDU
+{
+   private:
+      Card card;
+   public:
+      CardPDU(char rank, char suit) {
+         card.rank = rank;
+         card.suit = suit;
+      }
+      char getRank() {
+         return card.rank;
+      }
+      char getSuit() {
+         return card.suit;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&card), sizeof(Card));
+         return sizeof(Card);
+      }
+};
+
+class CardHandResponsePDU: public PDU
+{
+   private:
+      CardHandResponseHeader header;
+      std::vector<CardPDU*> cards;
+   public:
+      CardHandResponsePDU(uint8_t rc_1, uint8_t rc_2, uint8_t rc_3, uint8_t holder, uint8_t soft_value, uint8_t hard_value, std::vector<CardPDU*> c) {
+         header.reply_code_1 = rc_1;
+         header.reply_code_2 = rc_2;
+         header.reply_code_3 = rc_3;
+         header.holder = holder;
+         header.soft_value = soft_value;
+         header.hard_value = hard_value;
+         header.number_of_cards = cards.size();
+         cards = c;
+      }
+      uint8_t getReplyCode1() {
+         return header.reply_code_1;
+      }
+      uint8_t getReplyCode2() {
+         return header.reply_code_2;
+      }
+      uint8_t getReplyCode3() {
+         return header.reply_code_3;
+      }
+      uint8_t getHolder() {
+         return header.holder;
+      }
+      uint8_t getSoftValue() {
+         return header.soft_value;
+      }
+      uint8_t getHardValue() {
+         return header.hard_value;
+      }
+      std::vector<CardPDU*> getCards() {
+         return cards;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(CardHandResponseHeader));
+         ssize_t total_len = sizeof(CardHandResponseHeader);
+         for (auto card : cards) {
+            char* write_at_buf = *buf+total_len;
+            total_len += card->to_bytes(&write_at_buf);
+         }
+         return total_len;
+      }
+};
+
+class WinningsResponsePDU: public PDU
+{
+   private:
+      WinningsResponse details;
+   public:
+      WinningsResponsePDU(uint8_t rc_1, uint8_t rc_2, uint8_t rc_3, uint32_t w) {
+         details.reply_code_1 = rc_1;
+         details.reply_code_2 = rc_2;
+         details.reply_code_3 = rc_3;
+         details.winnings = w;
+      }
+      uint8_t getReplyCode1() {
+         return details.reply_code_1;
+      }
+      uint8_t getReplyCode2() {
+         return details.reply_code_2;
+      }
+      uint8_t getReplyCode3() {
+         return details.reply_code_3;
+      }
+      uint32_t getWinnings() {
+         return ntohl(details.winnings);
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&details), sizeof(WinningsResponse));
+         return sizeof(WinningsResponse);
       }
 };
 
