@@ -11,6 +11,7 @@
 
 #include "../protocol/pdu.h"
 
+char * write_buffer = (char *)malloc(4096);
 std::map<std::string, std::string> auth_credentials = {{"foo", "bar"}, {"sph77", "admin"}};
 
 class AccountDetails
@@ -36,6 +37,7 @@ class AccountDetails
       }
 };
 
+std::map<SSL*, std::string> conn_to_user;
 std::map<std::string, AccountDetails*> user_info;
 
 class TableDetails
@@ -48,23 +50,28 @@ class TableDetails
       TableDetails() {}
 };
 
-bool handle_getbalance(PDU* p) {
+bool handle_getbalance(PDU* p, SSL* conn) {
    GetBalancePDU* pdu = dynamic_cast<GetBalancePDU*>(p);
    if (!pdu) {
       return false;
    }
-   // TODO send the response
+   // Send the balance
+   BalanceResponsePDU* rpdu = new BalanceResponsePDU(2, 0, 3, user_info[conn_to_user[conn]]->getBalance());
+   ssize_t len = rpdu->to_bytes(&write_buffer);
+   SSL_write(conn, write_buffer, len);
    return true;
 }
 
-bool handle_updatebalance(PDU* p, std::string username) {
+bool handle_updatebalance(PDU* p, SSL* conn) {
    UpdateBalancePDU* pdu = dynamic_cast<UpdateBalancePDU*>(p);
    if (!pdu) {
       return false;
    }
    int32_t funds = pdu->getFunds();
-   user_info[username]->adjustBalance(funds);
-   // TODO send the response
+   user_info[conn_to_user[conn]]->adjustBalance(funds);
+   ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 0, 0, "Balance updated.\n\n");
+   ssize_t len = rpdu->to_bytes(&write_buffer);
+   SSL_write(conn, write_buffer, len);
    return true;
 }
 

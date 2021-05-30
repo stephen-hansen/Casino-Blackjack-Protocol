@@ -5,12 +5,12 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
+#include <iostream>
 #include <map>
 #include <mutex>
 #include <vector>
 
 #include "../protocol/pdu.h"
-
 
 PDU* parse_pdu_client(SSL* ssl) {
    ssize_t rc = 0;
@@ -90,3 +90,14 @@ PDU* parse_pdu_client(SSL* ssl) {
 
    return pdu;
 };
+
+void listen_to_server(SSL* ssl) {
+   for (;;) {
+      PDU * p = parse_pdu_client(ssl);
+      // Check for ASCII response, valid at any state
+      ASCIIResponsePDU* ascii_response_pdu = dynamic_cast<ASCIIResponsePDU*>(p);
+      if (ascii_response_pdu) {
+         std::cout << "server: " << ascii_response_pdu->getBody();
+      }
+   }
+}

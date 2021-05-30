@@ -196,7 +196,6 @@ static void connection_handler()
    STATE curr_state = VERSION;
    std::string username = "";
    std::string password = "";
-   char * write_buffer = (char *)malloc(4096);
 
    /* handle connections */
    for (;;)
@@ -241,18 +240,24 @@ static void connection_handler()
          UserPDU* user_pdu = dynamic_cast<UserPDU*>(p);
          if (!user_pdu) {
             // Send error, continue connection
-            std::cout << "Invalid PDU sent for USERNAME" << std::endl;
+            ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 0, 0, "Wrong command, expected USER.\n\n");
+            ssize_t len = rpdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
             continue;
          }
          // Accept whatever the username is, move to PASSWORD
          username = user_pdu->getUsername();
          curr_state = PASSWORD;
-         std::cout << "Waiting for password" << std::endl;
+         ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(3, 0, 0, "Provide password.\n\n");
+         ssize_t len = rpdu->to_bytes(&write_buffer);
+         SSL_write(ssl, write_buffer, len);
       } else if (curr_state == PASSWORD) {
          PassPDU* pass_pdu = dynamic_cast<PassPDU*>(p);
          if (!pass_pdu) {
             // Send error, continue connection but go back to USERNAME
-            std::cout << "Invalid PDU sent for PASSWORD" << std::endl;
+            ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 0, 0, "Wrong command, expected PASS. Going back to USERNAME state.\n\n");
+            ssize_t len = rpdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
             curr_state = USERNAME;
             continue;
          }
@@ -260,20 +265,25 @@ static void connection_handler()
          password = pass_pdu->getPassword();
          if ((auth_credentials.find(username) == auth_credentials.end()) || (auth_credentials[username] != password)) {
             // No username or wrong password
-            std::cout << "Invalid credentials" << std::endl;
+            ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 0, 2, "Authentication failed.\n\n");
+            ssize_t len = rpdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
             curr_state = USERNAME;
          } else {
             // Valid login; proceed to ACCOUNT, send 2-0-2
-            std::cout << "Valid credentials" << std::endl;
-            // Initialize balance
+            ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 0, 2, "Authenticated successfully.\n\n");
+            ssize_t len = rpdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+            // Initialize balance TODO check key
+            conn_to_user[ssl] = username;
             user_info[username] = new AccountDetails();
             curr_state = ACCOUNT;
          }
       } else if (curr_state == ACCOUNT) {
-         if (handle_getbalance(p)) {
+         if (handle_getbalance(p, ssl)) {
             continue;
          }
-         if (handle_updatebalance(p, username)) {
+         if (handle_updatebalance(p, ssl)) {
             continue;
          }
       }

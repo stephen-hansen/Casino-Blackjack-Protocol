@@ -10,9 +10,10 @@
 #include <iterator>
 #include <algorithm>
 #include <string>
+#include <thread>
 #include <vector>
 
-#include "../protocol/pdu.h"
+#include "client.h"
 
 const int ERROR_STATUS = -1;
 
@@ -126,6 +127,8 @@ int main(int argc, char const *argv[])
 
    printf("Connected with %s encryption\n", SSL_get_cipher(ssl));
    DisplayCerts(ssl);
+   // Start up a listening thread
+   std::thread listen(listen_to_server,ssl);
    // Send VERSION on connection
    uint32_t version = htonl(1); // Version 1, over big endian
    VersionPDU *version_pdu = new VersionPDU(version);
@@ -143,7 +146,6 @@ int main(int argc, char const *argv[])
       std::string command = tokens[0];
       if (command == "user") {
          if (tokens.size() == 2) {
-            std::cout << "sending username" << std::endl;
             std::string username = tokens[1];
             username.append("\n");
             UserPDU *user_pdu = new UserPDU(username);
@@ -155,7 +157,6 @@ int main(int argc, char const *argv[])
          }
       } else if (command == "pass") {
          if (tokens.size() == 2) {
-            std::cout << "sending password" << std::endl;
             std::string password = tokens[1];
             password.append("\n");
             PassPDU *pass_pdu = new PassPDU(password);
@@ -167,12 +168,24 @@ int main(int argc, char const *argv[])
          }
       } else if (command == "getbalance") {
          if (tokens.size() == 1) {
-            std::cout << "requesting balance" << std::endl;
+            GetBalancePDU *gb_pdu = new GetBalancePDU();
+            ssize_t len = gb_pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+            delete gb_pdu;
          } else {
             std::cout << "expected: getbalance" << std::endl;
          }
       } else if (command == "updatebalance") {
       } else if (command == "quit") {
+         if (tokens.size() == 1) {
+            QuitPDU *quit_pdu = new QuitPDU();
+            ssize_t len = quit_pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+            delete quit_pdu;
+            break;
+         } else {
+            std::cout << "expected: quit" << std::endl;
+         }
       } else if (command == "gettables") {
       } else if (command == "addtable") {
       } else if (command == "removetable") {
