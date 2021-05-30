@@ -94,13 +94,89 @@ PDU* parse_pdu_client(SSL* ssl) {
       pdu = new ListTablesResponsePDU(rc1,rc2,rc3,tabledata);
    } else if (rc1 == 2 && rc2 == 1 && rc3 == 4) {
       // Handle addtable response
+      uint16_t table_id;
+      // Read in the table id
+      if ((rc = SSL_read(ssl, &table_id, 2)) <= 0) {
+         return pdu;
+      }
+      pdu = new AddTableResponsePDU(rc1,rc2,rc3,table_id);
    } else if (rc1 == 3 && rc2 == 1 && rc3 == 0) {
       // Handle jointable response
+      char message_buf[8192];
+      int i = 0;
+      char c = '\0';
+      bool saw_newline = false;
+      while ((rc = SSL_read(ssl, &c, 1) > 0)) {
+         message_buf[i] = c;
+         i++;
+         if (c == '\n') {
+            if (saw_newline) {
+               break;
+            } else {
+               saw_newline = true;
+            }
+         } else {
+            saw_newline = false;
+         }
+
+         if (i == 8191) {
+            break;
+         }
+      }
+      // Successful message ends in \n and saw_newline
+      if (c == '\n' && saw_newline) {
+         // Terminate the message buffer
+         message_buf[i] = '\0';
+         // Convert to string, create pdu
+         pdu = new JoinTableResponsePDU(rc1,rc2,rc3,std::string(message_buf));
+      }
    } else if ((rc1 == 1 && rc2 == 1 && (rc3 >= 1 && rc3 <= 6 && rc3 != 5)) ||
          (rc1 == 3 && rc2 == 1 && rc3 == 2)) {
       // Handle card response
+      uint8_t holder;
+      uint8_t soft_value;
+      uint8_t hard_value;
+      uint8_t number_of_cards;
+      // Read in holder
+      if ((rc = SSL_read(ssl, &holder, 1)) <= 0) {
+         return pdu;
+      }
+      // Read in soft_value
+      if ((rc = SSL_read(ssl, &soft_value, 1)) <= 0) {
+         return pdu;
+      }
+      // Read in hard_value
+      if ((rc = SSL_read(ssl, &hard_value, 1)) <= 0) {
+         return pdu;
+      }
+      // Read in number of cards
+      if ((rc = SSL_read(ssl, &number_of_cards, 1)) <= 0) {
+         return pdu;
+      }
+      std::vector<CardPDU*> carddata;
+      for (uint8_t i=0; i<number_of_cards; i++) {
+         // Read in rank
+         char rank;
+         if ((rc = SSL_read(ssl, &rank, 1)) <= 0) {
+            return pdu;
+         }
+         // Read in suit
+         char suit;
+         if ((rc = SSL_read(ssl, &suit, 1)) <= 0) {
+            return pdu;
+         }
+         // Add to vector
+         carddata.push_back(new CardPDU(rank,suit));
+      }
+      pdu = new CardHandResponsePDU(rc1,rc2,rc3,holder,soft_value,hard_value,carddata);
    } else if (rc1 == 3 && rc2 == 1 && (rc3 == 3 || rc3 == 4)) {
       // Handle winnings response
+      uint32_t winnings;
+      // Read in the winnings
+      if ((rc = SSL_read(ssl, &winnings, 4)) <= 0) {
+         return pdu;
+      }
+      pdu = new WinningsResponsePDU(rc1,rc2,rc3,winnings);
    } else {
       // Assuming ASCII response
       char message_buf[8192];
