@@ -222,6 +222,8 @@ class QuitPDU: public PDU
       }
 };
 
+// TODO still missing all the blackjack PDUs
+
 class ASCIIResponsePDU: public PDU
 {
    private:
