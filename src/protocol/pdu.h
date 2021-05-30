@@ -222,7 +222,228 @@ class QuitPDU: public PDU
       }
 };
 
-// TODO still missing all the blackjack PDUs
+class GetTablesPDU: public PDU
+{
+   private:
+      Header header;
+   public:
+      GetTablesPDU() {
+         header.category_code = 1;
+         header.command_code = 0;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
+         return sizeof(Header);
+      }
+};
+
+class AddTablePDU: public PDU
+{
+   private:
+      Header header;
+      std::string settings;
+   public:
+      AddTablePDU(std::string s) {
+         header.category_code = 1;
+         header.command_code = 1;
+         settings = s;
+      }
+      std::string getSettings() {
+         return settings;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
+         settings.copy(*buf+sizeof(Header), settings.length());
+         return sizeof(Header) + settings.length();
+      }
+};
+
+class RemoveTablePDU: public PDU
+{
+   private:
+      RemoveTable details;
+   public:
+      RemoveTablePDU(uint16_t tid) {
+         details.category_code = 1;
+         details.command_code = 2;
+         details.table_id = tid;
+      }
+      uint16_t getTableID() {
+         return ntohl(details.table_id); 
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&details), sizeof(RemoveTable));
+         return sizeof(RemoveTable);
+      }
+};
+
+class JoinTablePDU: public PDU
+{
+   private:
+      JoinTable details;
+   public:
+      JoinTablePDU(uint16_t tid) {
+         details.category_code = 1;
+         details.command_code = 3;
+         details.table_id = tid;
+      }
+      uint16_t getTableID() {
+         return ntohl(details.table_id); 
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&details), sizeof(JoinTable));
+         return sizeof(JoinTable);
+      }
+};
+
+class LeaveTablePDU: public PDU
+{
+   private:
+      Header header;
+   public:
+      LeaveTablePDU() {
+         header.category_code = 1;
+         header.command_code = 4;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
+         return sizeof(Header);
+      }
+};
+
+class BetPDU: public PDU
+{
+   private:
+      Bet details;
+   public:
+      BetPDU(uint32_t amt) {
+         details.category_code = 1;
+         details.command_code = 5;
+         details.bet_amount = amt;
+      }
+      uint32_t getBetAmount() {
+         return ntohl(details.bet_amount); 
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&details), sizeof(Bet));
+         return sizeof(Bet);
+      }
+};
+
+class InsurancePDU: public PDU
+{
+   private:
+      Insurance details;
+   public:
+      InsurancePDU(uint8_t acc) {
+         details.category_code = 1;
+         details.command_code = 6;
+         details.accept = acc;
+      }
+      uint8_t isAccepted() {
+         return details.accept; 
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&details), sizeof(Insurance));
+         return sizeof(Insurance);
+      }
+};
+
+class HitPDU: public PDU
+{
+   private:
+      Header header;
+   public:
+      HitPDU() {
+         header.category_code = 1;
+         header.command_code = 7;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
+         return sizeof(Header);
+      }
+};
+
+class StandPDU: public PDU
+{
+   private:
+      Header header;
+   public:
+      StandPDU() {
+         header.category_code = 1;
+         header.command_code = 8;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
+         return sizeof(Header);
+      }
+};
+
+class DoubleDownPDU: public PDU
+{
+   private:
+      Header header;
+   public:
+      DoubleDownPDU() {
+         header.category_code = 1;
+         header.command_code = 9;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
+         return sizeof(Header);
+      }
+};
+
+class SplitPDU: public PDU
+{
+   private:
+      Header header;
+   public:
+      SplitPDU() {
+         header.category_code = 1;
+         header.command_code = 10;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
+         return sizeof(Header);
+      }
+};
+
+class SurrenderPDU: public PDU
+{
+   private:
+      Header header;
+   public:
+      SurrenderPDU() {
+         header.category_code = 1;
+         header.command_code = 11;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
+         return sizeof(Header);
+      }
+};
+
+class ChatPDU: public PDU
+{
+   private:
+      Header header;
+      std::string message;
+   public:
+      ChatPDU(std::string m) {
+         header.category_code = 1;
+         header.command_code = 12;
+         message = m;
+      }
+      std::string getMessage() {
+         return message;
+      }
+      ssize_t to_bytes(char** buf) {
+         memcpy((void*)*buf, reinterpret_cast<void*>(&header), sizeof(Header));
+         message.copy(*buf+sizeof(Header), message.length());
+         return sizeof(Header) + message.length();
+      }
+};
 
 class ASCIIResponsePDU: public PDU
 {
