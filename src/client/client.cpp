@@ -197,17 +197,73 @@ int main(int argc, char const *argv[])
             std::cout << "expected: quit" << std::endl;
          }
       } else if (command == "gettables") {
+         if (tokens.size() == 1) {
+            GetTablesPDU *send_pdu = new GetTablesPDU();
+            ssize_t len = send_pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+            delete send_pdu;
+         } else {
+            std::cout << "expected: gettables" << std::endl;
+         }
       } else if (command == "addtable") {
       } else if (command == "removetable") {
       } else if (command == "jointable") {
       } else if (command == "leavetable") {
+         if (tokens.size() == 1) {
+            LeaveTablePDU *send_pdu = new LeaveTablePDU();
+            ssize_t len = send_pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+            delete send_pdu;
+         } else {
+            std::cout << "expected: gettables" << std::endl;
+         }
       } else if (command == "bet") {
       } else if (command == "insurance") {
       } else if (command == "hit") {
+         if (tokens.size() == 1) {
+            HitPDU *send_pdu = new HitPDU();
+            ssize_t len = send_pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+            delete send_pdu;
+         } else {
+            std::cout << "expected: hit" << std::endl;
+         }
       } else if (command == "stand") {
+         if (tokens.size() == 1) {
+            StandPDU *send_pdu = new StandPDU();
+            ssize_t len = send_pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+            delete send_pdu;
+         } else {
+            std::cout << "expected: stand" << std::endl;
+         }
       } else if (command == "doubledown") {
+         if (tokens.size() == 1) {
+            DoubleDownPDU *send_pdu = new DoubleDownPDU();
+            ssize_t len = send_pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+            delete send_pdu;
+         } else {
+            std::cout << "expected: doubledown" << std::endl;
+         }
       } else if (command == "split") {
+         if (tokens.size() == 1) {
+            SplitPDU *send_pdu = new SplitPDU();
+            ssize_t len = send_pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+            delete send_pdu;
+         } else {
+            std::cout << "expected: split" << std::endl;
+         }
       } else if (command == "surrender") {
+         if (tokens.size() == 1) {
+            SurrenderPDU *send_pdu = new SurrenderPDU();
+            ssize_t len = send_pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+            delete send_pdu;
+         } else {
+            std::cout << "expected: gettables" << std::endl;
+         }
       } else if (command == "chat") {
       } else {
          std::cout << "Invalid command" << std::endl;
