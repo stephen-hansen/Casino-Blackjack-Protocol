@@ -567,7 +567,7 @@ class ListTablesResponsePDU: public PDU
          header.reply_code_1 = rc_1;
          header.reply_code_2 = rc_2;
          header.reply_code_3 = rc_3;
-         header.number_of_tables = td.size();
+         header.number_of_tables = htons((uint16_t)td.size());
          tabledata = td;
       }
       uint8_t getReplyCode1() {
@@ -687,7 +687,7 @@ class CardHandResponsePDU: public PDU
          header.holder = holder;
          header.soft_value = soft_value;
          header.hard_value = hard_value;
-         header.number_of_cards = cards.size();
+         header.number_of_cards = (uint8_t)cards.size();
          cards = c;
       }
       uint8_t getReplyCode1() {

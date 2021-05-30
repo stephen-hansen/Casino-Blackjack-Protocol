@@ -9,6 +9,7 @@
 #include <mutex>
 #include <vector>
 
+#include "../protocol/dfa.h"
 #include "../protocol/pdu.h"
 
 char * write_buffer = (char *)malloc(4096);
@@ -37,8 +38,11 @@ class AccountDetails
       }
 };
 
-std::map<SSL*, std::string> conn_to_user;
-std::map<std::string, AccountDetails*> user_info;
+enum SurrenderOptions {
+   NONE,
+   LATE,
+   EARLY
+};
 
 class TableDetails
 {
@@ -46,9 +50,54 @@ class TableDetails
       std::mutex mtx;
       std::vector<SSL*> players;
       std::vector<SSL*> pending_players;
+      uint8_t max_players = 5;
+      uint8_t number_decks = 8;
+      uint8_t payoff_high = 3;
+      uint8_t payoff_low = 2;
+      uint16_t bet_min = 25;
+      uint16_t bet_max = 1000;
+      bool hit_soft_17 = true;
+      SurrenderOptions surrender = LATE;
    public:
       TableDetails() {}
+      std::string to_string() {
+         // TODO fix ascii encoding of numbers
+         std::string out = "";
+         out += "max-players:";
+         out += (int)max_players;
+         out += "\nnumber-decks:";
+         out += (int)number_decks;
+         out += "\npayoff:";
+         out += (int)payoff_high;
+         out += "-";
+         out += (int)payoff_low;
+         out += "\nbet-limits:";
+         out += (int)bet_min;
+         out += "-";
+         out += (int)bet_max;
+         out += "\nhit-soft-17:";
+         if (hit_soft_17) {
+            out += "true";
+         } else {
+            out += "false";
+         }
+         out += "\nsurrender:";
+         if (surrender == NONE) {
+            out += "none";
+         } else if (surrender == LATE) {
+            out += "late";
+         } else if (surrender == EARLY) {
+            out += "early";
+         }
+         out += "\n\n";
+         return out;
+      }
 };
+
+std::map<SSL*, std::string> conn_to_user;
+std::map<SSL*, STATE> conn_to_state;
+std::map<std::string, AccountDetails*> user_info;
+std::map<uint16_t, TableDetails*> tables = {{0, new TableDetails()}}; 
 
 bool handle_getbalance(PDU* p, SSL* conn) {
    GetBalancePDU* pdu = dynamic_cast<GetBalancePDU*>(p);
@@ -194,18 +243,81 @@ PDU* parse_pdu_server(SSL* ssl) {
       }
    } else if (category_code == 1) { // Blackjack
       if (command_code == 0) { // GETTABLES
+         // No additional parsing necessary
+         pdu = new GetTablesPDU();
       } else if (command_code == 1) { // ADDTABLE
+         // TODO
       } else if (command_code == 2) { // REMOVETABLE
+         char message_buf[2];
+         // Read in the table ID
+         if ((rc = SSL_read(ssl, message_buf, 2)) <= 0) {
+            return pdu;
+         }
+         uint16_t tid = *reinterpret_cast<uint16_t*>(message_buf);
+         pdu = new RemoveTablePDU(tid);
       } else if (command_code == 3) { // JOINTABLE
+         char message_buf[2];
+         // Read in the table ID
+         if ((rc = SSL_read(ssl, message_buf, 2)) <= 0) {
+            return pdu;
+         }
+         uint16_t tid = *reinterpret_cast<uint16_t*>(message_buf);
+         pdu = new JoinTablePDU(tid);
       } else if (command_code == 4) { // LEAVETABLE
+         // No additional parsing necessary
+         pdu = new LeaveTablePDU();
       } else if (command_code == 5) { // BET
+         char message_buf[4];
+         // Read in the bet amount
+         if ((rc = SSL_read(ssl, message_buf, 4)) <= 0) {
+            return pdu;
+         }
+         uint32_t amt = *reinterpret_cast<uint32_t*>(message_buf);
+         pdu = new BetPDU(amt);
       } else if (command_code == 6) { // INSURANCE
+         char message_buf[1];
+         // Read in whether insurance was accepted
+         if ((rc = SSL_read(ssl, message_buf, 1)) <= 0) {
+            return pdu;
+         }
+         uint8_t accept = *reinterpret_cast<uint8_t*>(message_buf);
+         pdu = new InsurancePDU(accept);
       } else if (command_code == 7) { // HIT
+         // No additional parsing necessary
+         pdu = new HitPDU();
       } else if (command_code == 8) { // STAND
+         // No additional parsing necessary
+         pdu = new StandPDU();
       } else if (command_code == 9) { // DOUBLEDOWN
+         // No additional parsing necessary
+         pdu = new DoubleDownPDU();
       } else if (command_code == 10) { // SPLIT
+         // No additional parsing necessary
+         pdu = new SplitPDU();
       } else if (command_code == 11) { // SURRENDER
+         // No additional parsing necessary
+         pdu = new SurrenderPDU();
       } else if (command_code == 12) { // CHAT
+         char message_buf[130];
+         int i = 0;
+         char c = '\0';
+         while ((rc = SSL_read(ssl, &c, 1) > 0)) {
+            message_buf[i] = c;
+            i++;
+            if (c == '\n') {
+               break;
+            } else if (i == 129) {
+               break;
+            }
+         }
+         // Successful message ends in \n
+         if (c == '\n') {
+            // Terminate the message buffer
+            message_buf[i] = '\0';
+            // Convert to string, create pdu
+            pdu = new ChatPDU(std::string(message_buf));
+         }
+
       }
    }
    return pdu;

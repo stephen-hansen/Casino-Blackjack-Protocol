@@ -46,6 +46,52 @@ PDU* parse_pdu_client(SSL* ssl) {
       pdu = new BalanceResponsePDU(rc1,rc2,rc3,balance);
    } else if (rc1 == 2 && rc2 == 1 && rc3 == 1) {
       // Handle listtables response
+      uint16_t number_of_tables;
+      // Read in number of tables
+      if ((rc = SSL_read(ssl, &number_of_tables, 2)) <= 0) {
+         return pdu;
+      }
+      number_of_tables = ntohs(number_of_tables);
+      std::vector<TabledataPDU*> tabledata;
+      for (uint16_t i=0; i<number_of_tables; i++) {
+         // Read in table ID
+         uint16_t tid;
+         if ((rc = SSL_read(ssl, &tid, 2)) <= 0) {
+            return pdu;
+         }
+         // Read in table settings
+         char table_message_buf[8192];
+         int j = 0;
+         char c = '\0';
+         bool saw_newline = false;
+         while ((rc = SSL_read(ssl, &c, 1) > 0)) {
+            table_message_buf[j] = c;
+            j++;
+            if (c == '\n') {
+               if (saw_newline) {
+                  break;
+               } else {
+                  saw_newline = true;
+               }
+            } else {
+               saw_newline = false;
+            }
+
+            if (j == 8191) {
+               break;
+            }
+         }
+         // Successful message ends in \n and saw_newline
+         if (c == '\n' && saw_newline) {
+            // Terminate the message buffer
+            table_message_buf[j] = '\0';
+            // Convert to string, create pdu
+            TabledataPDU* tpdu = new TabledataPDU(tid,std::string(table_message_buf));
+            // Add to vector
+            tabledata.push_back(tpdu);
+         }
+      }
+      pdu = new ListTablesResponsePDU(rc1,rc2,rc3,tabledata);
    } else if (rc1 == 2 && rc2 == 1 && rc3 == 4) {
       // Handle addtable response
    } else if (rc1 == 3 && rc2 == 1 && rc3 == 0) {
@@ -85,7 +131,6 @@ PDU* parse_pdu_client(SSL* ssl) {
          // Convert to string, create pdu
          pdu = new ASCIIResponsePDU(rc1,rc2,rc3,std::string(message_buf));
       }
-
    }
 
    return pdu;

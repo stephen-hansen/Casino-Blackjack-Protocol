@@ -324,6 +324,7 @@ int main(int argc, char const *argv[])
                msg += " " + *it;
                ++it;
             }
+            msg += "\n";
             ChatPDU *chat_pdu = new ChatPDU(msg);
             ssize_t len = chat_pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);

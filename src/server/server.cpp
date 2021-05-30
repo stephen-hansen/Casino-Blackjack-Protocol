@@ -15,7 +15,6 @@
 #include <openssl/ssl.h>
 
 #include "server.h"
-#include "../protocol/dfa.h"
 
 #define MAX_STR_LEN 1028
 
@@ -193,7 +192,7 @@ static void connection_handler()
 
    // At this point the SSL connection is established
    // Set the connection to the VERSION state.
-   STATE curr_state = VERSION;
+   conn_to_state[ssl] = VERSION;
    std::string username = "";
    std::string password = "";
 
@@ -212,7 +211,7 @@ static void connection_handler()
          // Close the connection
          break;
       }
-      if (curr_state == VERSION) {
+      if (conn_to_state[ssl] == VERSION) {
          VersionPDU* version_pdu = dynamic_cast<VersionPDU*>(p);
          if (!version_pdu) {
             // Send error, close connection
@@ -227,7 +226,7 @@ static void connection_handler()
             VersionResponsePDU *pdu = new VersionResponsePDU(2, 0, 1, htonl(server_version));
             ssize_t len = pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
-            curr_state = USERNAME;
+            conn_to_state[ssl] = USERNAME;
          } else {
             // Not supported. Send error, close connection
             VersionResponsePDU *pdu = new VersionResponsePDU(5, 0, 1, htonl(server_version));
@@ -235,7 +234,7 @@ static void connection_handler()
             SSL_write(ssl, write_buffer, len);
             break;
          }
-      } else if (curr_state == USERNAME) {
+      } else if (conn_to_state[ssl] == USERNAME) {
          UserPDU* user_pdu = dynamic_cast<UserPDU*>(p);
          if (!user_pdu) {
             // Send error, continue connection
@@ -246,18 +245,18 @@ static void connection_handler()
          }
          // Accept whatever the username is, move to PASSWORD
          username = user_pdu->getUsername();
-         curr_state = PASSWORD;
+         conn_to_state[ssl] = PASSWORD;
          ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(3, 0, 0, "Provide password.\n\n");
          ssize_t len = rpdu->to_bytes(&write_buffer);
          SSL_write(ssl, write_buffer, len);
-      } else if (curr_state == PASSWORD) {
+      } else if (conn_to_state[ssl] == PASSWORD) {
          PassPDU* pass_pdu = dynamic_cast<PassPDU*>(p);
          if (!pass_pdu) {
             // Send error, continue connection but go back to USERNAME
             ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 0, 0, "Wrong command, expected PASS. Going back to USERNAME state.\n\n");
             ssize_t len = rpdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
-            curr_state = USERNAME;
+            conn_to_state[ssl] = USERNAME;
             continue;
          }
          // Accept whatever the password is, check auth
@@ -267,23 +266,38 @@ static void connection_handler()
             ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 0, 2, "Authentication failed.\n\n");
             ssize_t len = rpdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
-            curr_state = USERNAME;
+            conn_to_state[ssl] = USERNAME;
          } else {
             // Valid login; proceed to ACCOUNT, send 2-0-2
             ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 0, 2, "Authenticated successfully.\n\n");
             ssize_t len = rpdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
-            // Initialize balance TODO check key
             conn_to_user[ssl] = username;
-            user_info[username] = new AccountDetails();
-            curr_state = ACCOUNT;
+            if (user_info.find(username) == user_info.end()) {
+               user_info[username] = new AccountDetails();
+            }
+            conn_to_state[ssl] = ACCOUNT;
          }
-      } else if (curr_state == ACCOUNT) {
+      } else if (conn_to_state[ssl] == ACCOUNT) {
          if (handle_getbalance(p, ssl)) {
             continue;
          }
          if (handle_updatebalance(p, ssl)) {
             continue;
+         }
+         GetTablesPDU* gt_pdu = dynamic_cast<GetTablesPDU*>(p);
+         if (gt_pdu) {
+            std::vector<TabledataPDU*> tabledata;
+            for (std::map<uint16_t, TableDetails*>::iterator it = tables.begin(); it != tables.end(); it++) {
+               uint16_t tid = it->first;
+               std::string settings = it->second->to_string();
+               std::cout << settings << std::endl;
+               TabledataPDU* td = new TabledataPDU(htonl(tid), settings);
+               tabledata.push_back(td);
+            }
+            ListTablesResponsePDU* ltr_pdu = new ListTablesResponsePDU(2, 1, 1, tabledata);
+            ssize_t len = ltr_pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
          }
       }
    }
