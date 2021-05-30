@@ -168,7 +168,6 @@ int main(int argc, char const *argv[])
       } else if (command == "getbalance") {
          if (tokens.size() == 1) {
             std::cout << "requesting balance" << std::endl;
-
          } else {
             std::cout << "expected: getbalance" << std::endl;
          }

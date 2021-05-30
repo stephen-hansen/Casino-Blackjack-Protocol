@@ -86,7 +86,7 @@ PDU* parse_pdu_server(SSL* ssl) {
          // Successful message ends in \n
          if (c == '\n') {
             // Terminate the message buffer
-            message_buf[i+1] = '\0';
+            message_buf[i] = '\0';
             // Convert to string, create pdu
             pdu = new UserPDU(std::string(message_buf));
          }
@@ -106,7 +106,7 @@ PDU* parse_pdu_server(SSL* ssl) {
          // Successful message ends in \n
          if (c == '\n') {
             // Terminate the message buffer
-            message_buf[i+1] = '\0';
+            message_buf[i] = '\0';
             // Convert to string, create pdu
             pdu = new PassPDU(std::string(message_buf));
          }

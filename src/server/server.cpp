@@ -37,7 +37,7 @@ int socket_conn = -1;
 uint32_t server_version = 1;
 SSL_CTX* ssl_ctx;
 
-std::map<std::string, std::string> auth_credentials = {{"sph77", "admin"}, {"foo", "bar"}};
+std::map<std::string, std::string> auth_credentials = {{"foo", "bar"}, {"sph77", "admin"}};
 
 /* main entry point */
 int main(int argc, char* argv[])
