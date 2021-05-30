@@ -6,8 +6,10 @@
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include <algorithm>
+#include <random>
 #include <map>
 #include <mutex>
+#include <chrono>
 #include <thread>
 #include <vector>
 
@@ -60,7 +62,65 @@ class PlayerInfo
          bet = b;
          mtx.unlock();
       }
+      void addCard(CardPDU* c) {
+         mtx.lock();
+         hand.push_back(c);
+         mtx.unlock();
+      }
+      std::vector<CardPDU*> getHand() {
+         return hand;
+      }
 };
+
+std::map<char, std::pair<uint8_t, uint8_t>> rank_to_values = {
+   {'A', {11,1}},
+   {'2', {2,2}},
+   {'3', {3,3}},
+   {'4', {4,4}},
+   {'5', {5,5}},
+   {'6', {6,6}},
+   {'7', {7,7}},
+   {'8', {8,8}},
+   {'9', {9,9}},
+   {'T', {10,10}},
+   {'J', {10,10}},
+   {'Q', {10,10}},
+   {'K', {10,10}},
+};
+
+uint8_t get_soft_value(std::vector<CardPDU*> hand) {
+   bool seen_soft_ace = false;
+   uint8_t value = 0;
+   for (auto card : hand) {
+      char rank = card->getRank();
+      if (!seen_soft_ace) {
+         value += rank_to_values[rank].first;
+      } else {
+         value += rank_to_values[rank].second;
+      }
+      if (rank == 'A') {
+         seen_soft_ace = true;
+      }
+   }
+   return value;
+}
+
+uint8_t get_hard_value(std::vector<CardPDU*> hand) {
+   uint8_t value = 0;
+   for (auto card: hand) {
+      value += rank_to_values[card->getRank()].second;
+   }
+   return value;
+}
+
+uint8_t get_value(uint8_t soft_value, uint8_t hard_value) {
+   if (soft_value <= 21) {
+      return soft_value;
+   } else {
+      return hard_value;
+   }
+}
+
 
 class TableDetails
 {
@@ -68,6 +128,8 @@ class TableDetails
       std::mutex mtx;
       std::vector<SSL*> players;
       std::vector<SSL*> pending_players;
+      std::vector<CardPDU*> deck;
+      std::vector<CardPDU*> dealer_hand;
       std::thread game_thread;
       bool is_running = false;
       uint8_t player_action_count = 0;
@@ -80,6 +142,8 @@ class TableDetails
       uint16_t bet_max = 1000;
       bool hit_soft_17 = true;
       SurrenderOptions surrender = LATE;
+      std::random_device rd {};
+      std::default_random_engine rng = std::default_random_engine { rd() };
    public:
       TableDetails() {}
       void run_blackjack() {
@@ -100,6 +164,25 @@ class TableDetails
             pending_players.clear();
             mtx.unlock();
             // Round started, wait on bets
+            std::this_thread::sleep_for(std::chrono::seconds(15));
+            // Okay, moving to WAIT_FOR_TURN
+            for (auto player : players) {
+               conn_to_state[player] = WAIT_FOR_TURN;
+               // TODO msg
+            }
+            // Now to go through each player, get their turn. Giving 60 seconds for actions.
+            for (auto player : players) {
+               conn_to_state[player] = START_TURN;
+               // TODO msg
+               std::this_thread::sleep_for(std::chrono::seconds(60));
+            }
+            // Now all players have made their moves
+            // Time to play the dealer strategy
+            mtx.lock();
+            // TODO
+            mtx.unlock();
+            // Dealer done, update balances, new round
+            // TODO
          }
       }
       PlayerInfo* getPlayerInfo(SSL* conn) {
@@ -174,6 +257,37 @@ class TableDetails
          mtx.unlock();
          return ret;
       }
+      bool init_deck() {
+         std::vector<char> ranks = {'A','2','3','4','5','6','7','8','9','T','J','Q','K'};
+         std::vector<char> suits = {'H','C','D','S'};
+         std::vector<CardPDU*> cards;
+         for (int i=0; i<number_decks; i++) {
+            for (auto rank : ranks) {
+               for (auto suit : suits) {
+                  CardPDU* card = new CardPDU(rank, suit);
+                  cards.push_back(card);
+               }
+            }
+         }
+         std::shuffle(std::begin(cards), std::end(cards), rng);
+         deck = cards;
+         return true;
+      }
+      bool hit(SSL* player) {
+         mtx.lock();
+         if (deck.size() == 0) {
+            init_deck();
+         }
+         player_info[player]->addCard(deck.back());
+         std::vector<CardPDU*> player_hand = player_info[player]->getHand();
+         uint8_t soft_value = get_soft_value(player_hand);
+         uint8_t hard_value = get_hard_value(player_hand);
+         uint8_t value = get_value(soft_value, hard_value);
+         // TODO check if 21 or bust, send response
+         deck.pop_back();
+         mtx.unlock();
+         return true;
+      }
 };
 
 std::map<std::string, AccountDetails*> user_info;
@@ -221,6 +335,14 @@ bool handle_leavetable(PDU* p, SSL* conn) {
       ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 1, 0, "Left table.\n\n");
       ssize_t len = rpdu->to_bytes(&write_buffer);
       SSL_write(conn, write_buffer, len);
+   }
+   return true;
+}
+
+bool handle_hit(PDU* p, SSL* conn) {
+   HitPDU* pdu = dynamic_cast<HitPDU*>(p);
+   if (!pdu) {
+      return false;
    }
    return true;
 }
