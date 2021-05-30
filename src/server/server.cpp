@@ -210,7 +210,6 @@ static void connection_handler()
       QuitPDU* quit_pdu = dynamic_cast<QuitPDU*>(p);
       if (quit_pdu) {
          // Close the connection
-         std::cout << "Client sent QUIT, closing connection" << std::endl;
          break;
       }
       if (curr_state == VERSION) {
