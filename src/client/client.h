@@ -251,6 +251,7 @@ void listen_to_server(SSL* ssl) {
          std::string settings = jtr_pdu->getSettings();
          std::cout << "table settings:" << std::endl;
          std::cout << settings;
+         std::cout << "Round started; please place bet" << std::endl;
          continue;
       }
       CardHandResponsePDU* chr_pdu = dynamic_cast<CardHandResponsePDU*>(p);

@@ -355,6 +355,22 @@ static void connection_handler()
          if (handle_leavetable(p, ssl)) {
             continue;
          }
+         BetPDU* b_pdu = dynamic_cast<BetPDU*>(p);
+         if (b_pdu) {
+            conn_to_state[ssl] = WAIT_FOR_TURN;
+            uint32_t amt = b_pdu->getBetAmount();
+            if (amt > user_info[conn_to_user[ssl]]->getBalance()) {
+               continue;
+            }
+            uint16_t table_id = conn_to_table_id[ssl];
+            PlayerInfo* pi = tables[table_id]->getPlayerInfo(ssl);
+            pi->setBet(amt);
+            user_info[conn_to_user[ssl]]->adjustBalance(-amt);
+            ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 1, 0, "Accepted bet, please wait for turn.\n\n");
+            ssize_t len = rpdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+            continue;
+         }
          ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
          ssize_t len = rpdu->to_bytes(&write_buffer);
          SSL_write(ssl, write_buffer, len);

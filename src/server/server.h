@@ -50,8 +50,16 @@ enum SurrenderOptions {
 
 class PlayerInfo
 {
+   std::mutex mtx;
+   uint32_t bet = 0;
+   std::vector<CardPDU*> hand;
    public:
       PlayerInfo() {}
+      void setBet(uint32_t b) {
+         mtx.lock();
+         bet = b;
+         mtx.unlock();
+      }
 };
 
 class TableDetails
@@ -81,6 +89,7 @@ class TableDetails
             mtx.lock();
             for (auto player : pending_players) {
                players.push_back(player);
+               player_info[player] = new PlayerInfo();
                // Send the player info that the game is starting
                JoinTableResponsePDU* rpdu = new JoinTableResponsePDU(3, 1, 0, to_string());
                ssize_t len = rpdu->to_bytes(&write_buffer);
@@ -92,6 +101,9 @@ class TableDetails
             mtx.unlock();
             // Round started, wait on bets
          }
+      }
+      PlayerInfo* getPlayerInfo(SSL* conn) {
+         return player_info[conn];
       }
       std::string to_string() {
          // TODO fix ascii encoding of numbers
@@ -158,6 +170,7 @@ class TableDetails
             pending_players.erase(std::remove(pending_players.begin(), pending_players.end(), player), pending_players.end());
             ret = true;
          }
+         // TODO shutdown thread if no one playing
          mtx.unlock();
          return ret;
       }
