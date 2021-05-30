@@ -5,8 +5,10 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
+#include <algorithm>
 #include <map>
 #include <mutex>
+#include <thread>
 #include <vector>
 
 #include "../protocol/dfa.h"
@@ -14,6 +16,8 @@
 
 char * write_buffer = (char *)malloc(4096);
 std::map<std::string, std::string> auth_credentials = {{"foo", "bar"}, {"sph77", "admin"}};
+std::map<SSL*, std::string> conn_to_user;
+std::map<SSL*, STATE> conn_to_state;
 
 class AccountDetails
 {
@@ -44,12 +48,22 @@ enum SurrenderOptions {
    EARLY
 };
 
+class PlayerInfo
+{
+   public:
+      PlayerInfo() {}
+};
+
 class TableDetails
 {
    private:
       std::mutex mtx;
       std::vector<SSL*> players;
       std::vector<SSL*> pending_players;
+      std::thread game_thread;
+      bool is_running = false;
+      uint8_t player_action_count = 0;
+      std::map<SSL*,PlayerInfo*> player_info;
       uint8_t max_players = 5;
       uint8_t number_decks = 8;
       uint8_t payoff_high = 3;
@@ -60,6 +74,25 @@ class TableDetails
       SurrenderOptions surrender = LATE;
    public:
       TableDetails() {}
+      void run_blackjack() {
+         // Loop forever on rounds
+         for (;;) {
+            // Move all pending players in
+            mtx.lock();
+            for (auto player : pending_players) {
+               players.push_back(player);
+               // Send the player info that the game is starting
+               JoinTableResponsePDU* rpdu = new JoinTableResponsePDU(3, 1, 0, to_string());
+               ssize_t len = rpdu->to_bytes(&write_buffer);
+               SSL_write(player, write_buffer, len);
+               // Move player to ENTER_BETS
+               conn_to_state[player] = ENTER_BETS;
+            }
+            pending_players.clear();
+            mtx.unlock();
+            // Round started, wait on bets
+         }
+      }
       std::string to_string() {
          // TODO fix ascii encoding of numbers
          std::string out = "";
@@ -92,12 +125,47 @@ class TableDetails
          out += "\n\n";
          return out;
       }
+      bool add_player(SSL* player) {
+         mtx.lock();
+         bool ret = !is_running;
+         if (ret) {
+            is_running = true;
+            players.push_back(player);
+            player_info[player] = new PlayerInfo();
+            // Start the game thread here
+            game_thread = std::thread(&TableDetails::run_blackjack,this);
+            conn_to_state[player] = ENTER_BETS;
+            JoinTableResponsePDU* rpdu = new JoinTableResponsePDU(3, 1, 0, to_string());
+            ssize_t len = rpdu->to_bytes(&write_buffer);
+            SSL_write(player, write_buffer, len);
+         } else {
+            conn_to_state[player] = IN_PROGRESS;
+            pending_players.push_back(player); // Player joins in next round
+            ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(1, 1, 0, "Game in progress, please wait for next round.\n\n");
+            ssize_t len = rpdu->to_bytes(&write_buffer);
+            SSL_write(player, write_buffer, len);
+         }
+         mtx.unlock();
+         return ret; // True if game just started, False if game is already running
+      }
+      bool remove_player(SSL* player) {
+         bool ret = false;
+         mtx.lock();
+         if (std::count(players.begin(), players.end(), player)) {
+            players.erase(std::remove(players.begin(), players.end(), player), players.end());
+            ret = true;
+         } else if (std::count(pending_players.begin(), pending_players.end(), player)) {
+            pending_players.erase(std::remove(pending_players.begin(), pending_players.end(), player), pending_players.end());
+            ret = true;
+         }
+         mtx.unlock();
+         return ret;
+      }
 };
 
-std::map<SSL*, std::string> conn_to_user;
-std::map<SSL*, STATE> conn_to_state;
 std::map<std::string, AccountDetails*> user_info;
 std::map<uint16_t, TableDetails*> tables = {{0, new TableDetails()}}; 
+std::map<SSL*, uint16_t> conn_to_table_id;
 
 bool handle_getbalance(PDU* p, SSL* conn) {
    GetBalancePDU* pdu = dynamic_cast<GetBalancePDU*>(p);
@@ -121,6 +189,26 @@ bool handle_updatebalance(PDU* p, SSL* conn) {
    ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 0, 0, "Balance updated.\n\n");
    ssize_t len = rpdu->to_bytes(&write_buffer);
    SSL_write(conn, write_buffer, len);
+   return true;
+}
+
+bool handle_leavetable(PDU* p, SSL* conn) {
+   LeaveTablePDU* pdu = dynamic_cast<LeaveTablePDU*>(p);
+   if (!pdu) {
+      return false;
+   }
+   uint32_t table_id = conn_to_table_id[conn];
+   if (tables.find(table_id) == tables.end()) {
+      ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Table ID is no longer valid.\n\n");
+      ssize_t len = rpdu->to_bytes(&write_buffer);
+      SSL_write(conn, write_buffer, len);  
+   } else {
+      tables[table_id]->remove_player(conn);
+      conn_to_state[conn] = ACCOUNT;
+      ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 1, 0, "Left table.\n\n");
+      ssize_t len = rpdu->to_bytes(&write_buffer);
+      SSL_write(conn, write_buffer, len);
+   }
    return true;
 }
 

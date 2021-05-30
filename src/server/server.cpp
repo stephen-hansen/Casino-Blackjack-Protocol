@@ -294,10 +294,137 @@ static void connection_handler()
                TabledataPDU* td = new TabledataPDU(htonl(tid), settings);
                tabledata.push_back(td);
             }
-            ListTablesResponsePDU* ltr_pdu = new ListTablesResponsePDU(2, 1, 1, tabledata);
-            ssize_t len = ltr_pdu->to_bytes(&write_buffer);
-            SSL_write(ssl, write_buffer, len);
+            if (tabledata.size() == 0) {
+               ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(4, 1, 1, "No tables available.\n\n");
+               ssize_t len = rpdu->to_bytes(&write_buffer);
+               SSL_write(ssl, write_buffer, len);
+            } else {
+               ListTablesResponsePDU* ltr_pdu = new ListTablesResponsePDU(2, 1, 1, tabledata);
+               ssize_t len = ltr_pdu->to_bytes(&write_buffer);
+               SSL_write(ssl, write_buffer, len);
+            }
+            continue;
          }
+         AddTablePDU* at_pdu = dynamic_cast<AddTablePDU*>(p);
+         if (at_pdu) {
+            // TODO
+            continue;
+         }
+         RemoveTablePDU* rt_pdu = dynamic_cast<RemoveTablePDU*>(p);
+         if (rt_pdu) {
+            // TODO
+            continue;
+         }
+         JoinTablePDU* jt_pdu = dynamic_cast<JoinTablePDU*>(p);
+         if (jt_pdu) {
+            uint16_t table_id = jt_pdu->getTableID();
+            if (tables.find(table_id) != tables.end()) {
+               conn_to_table_id[ssl] = table_id;
+               tables[table_id]->add_player(ssl);
+            } else {
+               ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(4, 1, 2, "Table with ID does not exist.\n\n");
+               ssize_t len = rpdu->to_bytes(&write_buffer);
+               SSL_write(ssl, write_buffer, len);
+            }
+            continue;
+         }
+         ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 0, 0, "Command not accepted at current state.\n\n");
+         ssize_t len = rpdu->to_bytes(&write_buffer);
+         SSL_write(ssl, write_buffer, len);
+      } else if (conn_to_state[ssl] == IN_PROGRESS) {
+         // This state only handles balance commands and leavetable, nothing else
+         if (handle_getbalance(p, ssl)) {
+            continue;
+         }
+         if (handle_updatebalance(p, ssl)) {
+            continue;
+         }
+         if (handle_leavetable(p, ssl)) {
+            continue;
+         }
+         ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
+         ssize_t len = rpdu->to_bytes(&write_buffer);
+         SSL_write(ssl, write_buffer, len);
+      } else if (conn_to_state[ssl] == ENTER_BETS) {
+         if (handle_getbalance(p, ssl)) {
+            continue;
+         }
+         if (handle_updatebalance(p, ssl)) {
+            continue;
+         }
+         if (handle_leavetable(p, ssl)) {
+            continue;
+         }
+         ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
+         ssize_t len = rpdu->to_bytes(&write_buffer);
+         SSL_write(ssl, write_buffer, len);
+      } else if (conn_to_state[ssl] == WAIT_FOR_TURN) {
+         // This state only handles balance commands and leavetable, nothing else
+         if (handle_getbalance(p, ssl)) {
+            continue;
+         }
+         if (handle_updatebalance(p, ssl)) {
+            continue;
+         }
+         if (handle_leavetable(p, ssl)) {
+            continue;
+         }
+         ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
+         ssize_t len = rpdu->to_bytes(&write_buffer);
+         SSL_write(ssl, write_buffer, len);
+      } else if (conn_to_state[ssl] == INSURANCE) {
+         if (handle_getbalance(p, ssl)) {
+            continue;
+         }
+         if (handle_updatebalance(p, ssl)) {
+            continue;
+         }
+         if (handle_leavetable(p, ssl)) {
+            continue;
+         }
+         ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
+         ssize_t len = rpdu->to_bytes(&write_buffer);
+         SSL_write(ssl, write_buffer, len);
+      } else if (conn_to_state[ssl] == START_TURN) {
+         if (handle_getbalance(p, ssl)) {
+            continue;
+         }
+         if (handle_updatebalance(p, ssl)) {
+            continue;
+         }
+         if (handle_leavetable(p, ssl)) {
+            continue;
+         }
+         ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
+         ssize_t len = rpdu->to_bytes(&write_buffer);
+         SSL_write(ssl, write_buffer, len);
+      } else if (conn_to_state[ssl] == TURN) {
+         if (handle_getbalance(p, ssl)) {
+            continue;
+         }
+         if (handle_updatebalance(p, ssl)) {
+            continue;
+         }
+         if (handle_leavetable(p, ssl)) {
+            continue;
+         }
+         ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
+         ssize_t len = rpdu->to_bytes(&write_buffer);
+         SSL_write(ssl, write_buffer, len);
+      } else if (conn_to_state[ssl] == WAIT_FOR_DEALER) {
+         // This state only handles balance commands and leavetable, nothing else
+         if (handle_getbalance(p, ssl)) {
+            continue;
+         }
+         if (handle_updatebalance(p, ssl)) {
+            continue;
+         }
+         if (handle_leavetable(p, ssl)) {
+            continue;
+         }
+         ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
+         ssize_t len = rpdu->to_bytes(&write_buffer);
+         SSL_write(ssl, write_buffer, len);
       }
    }
 
