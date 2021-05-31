@@ -235,10 +235,6 @@ int main(int argc, char const *argv[])
          }
       } else if (command == "quit") {
          if (tokens.size() == 1) {
-            QuitPDU *quit_pdu = new QuitPDU();
-            ssize_t len = quit_pdu->to_bytes(&write_buffer);
-            SSL_write(ssl, write_buffer, len);
-            delete quit_pdu;
             break;
          } else {
             std::cout << "expected: quit" << std::endl;
@@ -359,6 +355,10 @@ int main(int argc, char const *argv[])
          std::cout << "> chat <msg>" << std::endl;
       }
    }
+   QuitPDU *quit_pdu = new QuitPDU();
+   len = quit_pdu->to_bytes(&write_buffer);
+   SSL_write(ssl, write_buffer, len);
+   delete quit_pdu;
    SSL_free(ssl);
    close(sfd);
    SSL_CTX_free(ctx);

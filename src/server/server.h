@@ -198,14 +198,23 @@ class TableDetails
             std::this_thread::sleep_for(std::chrono::seconds(15));
             // Okay, moving to WAIT_FOR_TURN
             broadcast("Starting round...\n\n", players);
+            uint8_t number_of_players = 0;
             for (auto player : players) {
                player_info[player]->clearHand();
                if (player_info[player]->getBet() > 0) {
                   conn_to_state[player] = WAIT_FOR_TURN;
+                  number_of_players += 1;
                   hit(player);
                } else {
                   conn_to_state[player] = IN_PROGRESS;
                }
+            }
+            if (number_of_players == 0) {
+               // Immediately start new round
+               for (auto player : players) {
+                  conn_to_state[player] = ENTER_BETS;
+               }
+               continue;
             }
             // Get dealer hit
             hit_dealer();
@@ -217,7 +226,7 @@ class TableDetails
                }
             }
 
-            // Now to go through each player, get their turn. Giving 30 seconds for actions.
+            // Now to go through each player, get their turn. Giving 30 seconds for actions
             for (auto player : players) {
                if (player_info[player]->getBet() > 0) {
                   if (player_info[player]->getHand().size() == 2 && player_info[player]->getValue() == 21) {
@@ -457,23 +466,23 @@ bool handle_updatebalance(PDU* p, SSL* conn) {
    return true;
 }
 
-bool handle_leavetable(PDU* p, SSL* conn) {
-   LeaveTablePDU* pdu = dynamic_cast<LeaveTablePDU*>(p);
-   if (!pdu) {
-      return false;
-   }
+void leavetable(SSL* conn) {
    uint32_t table_id = conn_to_table_id[conn];
-   if (tables.find(table_id) == tables.end()) {
-      ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Table ID is no longer valid.\n\n");
-      ssize_t len = rpdu->to_bytes(&write_buffer);
-      SSL_write(conn, write_buffer, len);  
-   } else {
+   if (!(tables.find(table_id) == tables.end())) {
       tables[table_id]->remove_player(conn);
       conn_to_state[conn] = ACCOUNT;
       ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 1, 0, "Left table.\n\n");
       ssize_t len = rpdu->to_bytes(&write_buffer);
       SSL_write(conn, write_buffer, len);
    }
+}
+
+bool handle_leavetable(PDU* p, SSL* conn) {
+   LeaveTablePDU* pdu = dynamic_cast<LeaveTablePDU*>(p);
+   if (!pdu) {
+      return false;
+   }
+   leavetable(conn);
    return true;
 }
 

@@ -208,6 +208,8 @@ static void connection_handler()
       // Check if user sends quit, valid at any state
       QuitPDU* quit_pdu = dynamic_cast<QuitPDU*>(p);
       if (quit_pdu) {
+         // Leave table if at a table
+         leavetable(ssl);
          // Close the connection
          break;
       }
