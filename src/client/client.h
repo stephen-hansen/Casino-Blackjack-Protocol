@@ -218,47 +218,46 @@ void listen_to_server(SSL* ssl) {
       ASCIIResponsePDU* ar_pdu = dynamic_cast<ASCIIResponsePDU*>(p);
       if (ar_pdu) {
          std::string body = ar_pdu->getBody();
-         std::cout << "server message: " << body.substr(0,body.length()-1);
+         std::cout << "> " << body.substr(0,body.length()-1);
          continue;
       }
       VersionResponsePDU* vr_pdu = dynamic_cast<VersionResponsePDU*>(p);
       if (vr_pdu) {
-         std::cout << "server version=" << vr_pdu->getVersion() << std::endl;
+         std::cout << "> server version=" << vr_pdu->getVersion() << std::endl;
          continue;
       }
       BalanceResponsePDU* br_pdu = dynamic_cast<BalanceResponsePDU*>(p);
       if (br_pdu) {
-         std::cout << "current balance=" << br_pdu->getBalance() << std::endl;
+         std::cout << "> current balance=" << br_pdu->getBalance() << std::endl;
          continue;
       }
       ListTablesResponsePDU* ltr_pdu = dynamic_cast<ListTablesResponsePDU*>(p);
       if (ltr_pdu) {
          std::vector<TabledataPDU*> tabledata = ltr_pdu->getTabledata();
          for (auto data : tabledata) {
-            std::cout << "table ID: " << data->getTableID() << std::endl;
+            std::cout << "> table ID: " << data->getTableID() << std::endl;
             std::cout << data->getSettings();
          }
          continue;
       }
       AddTableResponsePDU* atr_pdu = dynamic_cast<AddTableResponsePDU*>(p);
       if (atr_pdu) {
-         std::cout << "added table, table ID=" << atr_pdu->getTableID() << std::endl;
+         std::cout << "> added table, table ID=" << atr_pdu->getTableID() << std::endl;
          continue;
       }
       JoinTableResponsePDU* jtr_pdu = dynamic_cast<JoinTableResponsePDU*>(p);
       if (jtr_pdu) {
          std::string settings = jtr_pdu->getSettings();
-         std::cout << "table settings:" << std::endl;
+         std::cout << "> table settings:" << std::endl;
          std::cout << settings;
-         std::cout << "Round started; please place bet" << std::endl;
          continue;
       }
       CardHandResponsePDU* chr_pdu = dynamic_cast<CardHandResponsePDU*>(p);
       if (chr_pdu) {
          if (chr_pdu->getHolder()) {
-            std::cout << "Your hand:";
+            std::cout << "> Your hand:";
          } else {
-            std::cout << "Dealer's hand:";
+            std::cout << "> Dealer's hand:";
          }
          std::vector<CardPDU*> cards = chr_pdu->getCards();
          for (auto card : cards) {
@@ -282,7 +281,7 @@ void listen_to_server(SSL* ssl) {
       }
       WinningsResponsePDU* wr_pdu = dynamic_cast<WinningsResponsePDU*>(p);
       if (wr_pdu) {
-         std::cout << "winnings=" << wr_pdu->getWinnings() << std::endl;
+         std::cout << "> winnings=" << wr_pdu->getWinnings() << std::endl;
          continue;
       }
    }
