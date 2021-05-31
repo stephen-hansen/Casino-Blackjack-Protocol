@@ -327,7 +327,7 @@ void connection_handler(int socket_conn)
          ssize_t len = rpdu->to_bytes(&write_buffer);
          SSL_write(ssl, write_buffer, len);
       } else if (conn_to_state[ssl] == IN_PROGRESS) {
-         // This state only handles balance commands and leavetable, nothing else
+         // This state only handles balance commands, leavetable, and chat, nothing else
          if (handle_getbalance(p, ssl)) {
             continue;
          }
@@ -335,6 +335,9 @@ void connection_handler(int socket_conn)
             continue;
          }
          if (handle_leavetable(p, ssl)) {
+            continue;
+         }
+         if (handle_chat(p, ssl)) {
             continue;
          }
          ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
@@ -348,6 +351,9 @@ void connection_handler(int socket_conn)
             continue;
          }
          if (handle_leavetable(p, ssl)) {
+            continue;
+         }
+         if (handle_chat(p, ssl)) {
             continue;
          }
          BetPDU* b_pdu = dynamic_cast<BetPDU*>(p);
@@ -379,7 +385,7 @@ void connection_handler(int socket_conn)
          ssize_t len = rpdu->to_bytes(&write_buffer);
          SSL_write(ssl, write_buffer, len);
       } else if (conn_to_state[ssl] == WAIT_FOR_TURN) {
-         // This state only handles balance commands and leavetable, nothing else
+         // This state only handles balance commands, leavetable, and chat, nothing else
          if (handle_getbalance(p, ssl)) {
             continue;
          }
@@ -387,6 +393,9 @@ void connection_handler(int socket_conn)
             continue;
          }
          if (handle_leavetable(p, ssl)) {
+            continue;
+         }
+         if (handle_chat(p, ssl)) {
             continue;
          }
          ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
@@ -411,11 +420,14 @@ void connection_handler(int socket_conn)
          if (handle_doubledown(p, ssl)) {
             continue;
          }
+         if (handle_chat(p, ssl)) {
+            continue;
+         }
          ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
          ssize_t len = rpdu->to_bytes(&write_buffer);
          SSL_write(ssl, write_buffer, len);
       } else if (conn_to_state[ssl] == WAIT_FOR_DEALER) {
-         // This state only handles balance commands and leavetable, nothing else
+         // This state only handles balance commands, leavetable, and chat, nothing else
          if (handle_getbalance(p, ssl)) {
             continue;
          }
@@ -423,6 +435,9 @@ void connection_handler(int socket_conn)
             continue;
          }
          if (handle_leavetable(p, ssl)) {
+            continue;
+         }
+         if (handle_chat(p, ssl)) {
             continue;
          }
          ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");

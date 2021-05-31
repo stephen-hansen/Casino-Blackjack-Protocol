@@ -140,17 +140,6 @@ uint8_t get_value(uint8_t soft_value, uint8_t hard_value) {
    }
 }
 
-void broadcast(std::string message, std::vector<SSL*> players) {
-   char * write_buffer = (char *)malloc(4096);
-   ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(1, 1, 5, message);
-   ssize_t len = rpdu->to_bytes(&write_buffer);
-   for (auto ssl : players) {
-      SSL_write(ssl, write_buffer, len);
-   }
-   free(write_buffer);
-   delete rpdu;
-}
-
 class TableDetails
 {
    private:
@@ -179,6 +168,19 @@ class TableDetails
       ~TableDetails() {
          free(write_buffer);
       }
+      void broadcast(std::string message) {
+         char * write_buffer = (char *)malloc(4096);
+         ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(1, 1, 5, message);
+         ssize_t len = rpdu->to_bytes(&write_buffer);
+         for (auto ssl : players) {
+            SSL_write(ssl, write_buffer, len);
+         }
+         for (auto ssl : pending_players) {
+            SSL_write(ssl, write_buffer, len);
+         }
+         free(write_buffer);
+         delete rpdu;
+      }
       void run_blackjack() {
          // Loop forever on rounds
          for (;;) {
@@ -194,14 +196,14 @@ class TableDetails
                // Move player to ENTER_BETS
                conn_to_state[player] = ENTER_BETS;
             }
-            broadcast("Accepting bets!\n\n", players);
+            broadcast("Accepting bets!\n\n");
             pending_players.clear();
             dealer_hand.clear();
             mtx.unlock();
             // Round started, wait on bets
             std::this_thread::sleep_for(std::chrono::seconds(15));
             // Okay, moving to WAIT_FOR_TURN
-            broadcast("Starting round...\n\n", players);
+            broadcast("Starting round...\n\n");
             uint8_t number_of_players = 0;
             for (auto player : players) {
                player_info[player]->clearHand();
@@ -235,10 +237,10 @@ class TableDetails
                if (player_info[player]->getBet() > 0) {
                   if (player_info[player]->getHand().size() == 2 && player_info[player]->getValue() == 21) {
                      conn_to_state[player] = WAIT_FOR_DEALER;
-                     broadcast("Player " + conn_to_user[player] + " has a natural blackjack! Skipping turn.\n\n", players);
+                     broadcast("Player " + conn_to_user[player] + " has a natural blackjack! Skipping turn.\n\n");
                   } else {
                      conn_to_state[player] = TURN;
-                     broadcast("It is " + conn_to_user[player] + "'s turn.\n\n", players);
+                     broadcast("It is " + conn_to_user[player] + "'s turn.\n\n");
                      ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(3, 1, 2, "It is your turn!\n\n");
                      ssize_t len = rpdu->to_bytes(&write_buffer);
                      SSL_write(player, write_buffer, len);
@@ -329,7 +331,7 @@ class TableDetails
          } else {
             conn_to_state[player] = IN_PROGRESS;
             pending_players.push_back(player); // Player joins in next round
-            broadcast(conn_to_user[player] + " is joining in the next round.\n\n", players);
+            broadcast(conn_to_user[player] + " is joining in the next round.\n\n");
             ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(1, 1, 0, "Game in progress, please wait for next round.\n\n");
             ssize_t len = rpdu->to_bytes(&write_buffer);
             SSL_write(player, write_buffer, len);
@@ -347,7 +349,7 @@ class TableDetails
             pending_players.erase(std::remove(pending_players.begin(), pending_players.end(), player), pending_players.end());
             ret = true;
          }
-         broadcast(conn_to_user[player] + " has left! Bye!\n\n", players);
+         broadcast(conn_to_user[player] + " has left! Bye!\n\n");
          // TODO shutdown thread if no one playing 
          mtx.unlock();
          return ret;
@@ -491,6 +493,18 @@ bool handle_leavetable(PDU* p, SSL* conn) {
       return false;
    }
    leavetable(conn);
+   return true;
+}
+
+bool handle_chat(PDU* p, SSL* conn) {
+   ChatPDU* pdu = dynamic_cast<ChatPDU*>(p);
+   if (!pdu) {
+      return false;
+   }
+   uint32_t table_id = conn_to_table_id[conn];
+   if (!(tables.find(table_id) == tables.end())) {
+      tables[table_id]->broadcast(conn_to_user[conn] + ": " + pdu->getMessage() + "\n");
+   }
    return true;
 }
 
