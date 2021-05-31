@@ -410,14 +410,12 @@ class TableDetails
          uint8_t soft_value = get_soft_value(dealer_hand);
          uint8_t hard_value = get_hard_value(dealer_hand);
          uint8_t value = get_value(soft_value, hard_value);
-         uint8_t rc1 = 1;
          uint8_t rc3 = 1;
          if (value == 21) {
             if (dealer_hand.size() == 2) {
                rc3 = 4;
             } else {
-               rc1 = 3;
-               rc3 = 3;
+               rc3 = 6;
             }
             ret = false;
          } else if (value > 21) {
@@ -431,7 +429,7 @@ class TableDetails
             ret = false;
          }
          dealer_value = value;
-         CardHandResponsePDU* chr_pdu = new CardHandResponsePDU(rc1,1,rc3,0,soft_value,hard_value,dealer_hand);
+         CardHandResponsePDU* chr_pdu = new CardHandResponsePDU(1,1,rc3,0,soft_value,hard_value,dealer_hand);
          ssize_t len = chr_pdu->to_bytes(&write_buffer);
          for (auto player : players) {
             SSL_write(player, write_buffer, len);

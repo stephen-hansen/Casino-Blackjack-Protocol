@@ -20,11 +20,10 @@
 static void sigIntHandler(int sig);
 static void setup_libssl();
 static void load_certs_keys(const char* cert_file, const char* key_file);
-static void connection_handler();
+void connection_handler(int socket_conn);
 
 /* globals */
 int socket_listen = -1;
-int socket_conn = -1;
 uint32_t server_version = 1;
 SSL_CTX* ssl_ctx;
 /* main entry point */
@@ -65,13 +64,15 @@ int main(int argc, char* argv[])
    /* wait for connections */
    for (;;)
    {
+      int socket_conn = -1;
       if ((socket_conn = accept(socket_listen, NULL, NULL)) < 0)
       {
          perror("accept");
          exit(EXIT_FAILURE);
       }
 
-      connection_handler();
+      std::thread conn(connection_handler, socket_conn);
+      conn.detach();
    }
 
    return EXIT_SUCCESS;
@@ -84,10 +85,10 @@ static void sigIntHandler(int sig)
    {
       close(socket_listen);
    }
-   if (socket_conn != -1)
-   {
-      close(socket_conn);
-   }
+   //if (socket_conn != -1)
+   //{
+   //   close(socket_conn);
+   //}
    if (NULL != ssl_ctx)
    {
       SSL_CTX_free(ssl_ctx);
@@ -131,11 +132,10 @@ static void load_certs_keys(const char* cert_file, const char* key_file)
    }
 }
 
-static void connection_handler()
+void connection_handler(int socket_conn)
 {
    SSL* ssl; /* SSL descriptor */
    int ret = -1;
-
    if (NULL == (ssl = SSL_new(ssl_ctx)))
    {
       fprintf(stderr, "SSL_new failed.\n");
