@@ -16,14 +16,6 @@
 
 #include "server.h"
 
-#define MAX_STR_LEN 1028
-
-/* additional info
- * http://simplestcodings.blogspot.com.br/2010/08/secure-server-client-using-openssl-in-c.html
- * http://stackoverflow.com/questions/11705815/client-and-server-communication-using-ssl-c-c-ssl-protocol-dont-works
- * http://lcalligaris.wordpress.com/2011/04/07/implementing-a-secure-socket/
- */
-
 /* prototypes */
 static void sigIntHandler(int sig);
 static void setup_libssl();
@@ -196,6 +188,7 @@ static void connection_handler()
    std::string username = "";
    std::string password = "";
 
+   char * write_buffer = (char *)malloc(4096);
    /* handle connections */
    for (;;)
    {
@@ -434,7 +427,7 @@ static void connection_handler()
          SSL_write(ssl, write_buffer, len);
       }
    }
-
+   free(write_buffer);
    /* close connection to client */
    SSL_free(ssl);
    if (close(socket_conn) < 0)

@@ -17,7 +17,6 @@
 #include "../protocol/dfa.h"
 #include "../protocol/pdu.h"
 
-char * write_buffer = (char *)malloc(4096);
 std::map<std::string, std::string> auth_credentials = {{"foo", "bar"}, {"sph77", "admin"}, {"kain", "itdepends"}};
 std::map<SSL*, std::string> conn_to_user;
 std::map<SSL*, STATE> conn_to_state;
@@ -142,11 +141,13 @@ uint8_t get_value(uint8_t soft_value, uint8_t hard_value) {
 }
 
 void broadcast(std::string message, std::vector<SSL*> players) {
+   char * write_buffer = (char *)malloc(4096);
    ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(1, 1, 5, message);
    ssize_t len = rpdu->to_bytes(&write_buffer);
    for (auto ssl : players) {
       SSL_write(ssl, write_buffer, len);
    }
+   free(write_buffer);
    delete rpdu;
 }
 
@@ -170,11 +171,14 @@ class TableDetails
       uint16_t bet_min = 25;
       uint16_t bet_max = 1000;
       bool hit_soft_17 = true;
-      SurrenderOptions surrender = LATE;
+      char * write_buffer = (char *)malloc(4096);
       std::random_device rd {};
       std::default_random_engine rng = std::default_random_engine { rd() };
    public:
       TableDetails() {}
+      ~TableDetails() {
+         free(write_buffer);
+      }
       void run_blackjack() {
          // Loop forever on rounds
          for (;;) {
@@ -446,10 +450,12 @@ bool handle_getbalance(PDU* p, SSL* conn) {
    if (!pdu) {
       return false;
    }
+   char * write_buffer = (char *)malloc(4096);
    // Send the balance
    BalanceResponsePDU* rpdu = new BalanceResponsePDU(2, 0, 3, htonl(user_info[conn_to_user[conn]]->getBalance()));
    ssize_t len = rpdu->to_bytes(&write_buffer);
    SSL_write(conn, write_buffer, len);
+   free(write_buffer);
    return true;
 }
 
@@ -461,8 +467,10 @@ bool handle_updatebalance(PDU* p, SSL* conn) {
    int32_t funds = pdu->getFunds();
    user_info[conn_to_user[conn]]->adjustBalance(funds);
    ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 0, 0, "Balance updated.\n\n");
+   char * write_buffer = (char *)malloc(4096);
    ssize_t len = rpdu->to_bytes(&write_buffer);
    SSL_write(conn, write_buffer, len);
+   free(write_buffer);
    return true;
 }
 
@@ -472,8 +480,10 @@ void leavetable(SSL* conn) {
       tables[table_id]->remove_player(conn);
       conn_to_state[conn] = ACCOUNT;
       ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 1, 0, "Left table.\n\n");
+      char * write_buffer = (char *)malloc(4096);
       ssize_t len = rpdu->to_bytes(&write_buffer);
       SSL_write(conn, write_buffer, len);
+      free(write_buffer);
    }
 }
 
@@ -494,8 +504,10 @@ bool handle_hit(PDU* p, SSL* conn) {
    uint32_t table_id = conn_to_table_id[conn];
    if (tables.find(table_id) == tables.end()) {
       ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Table ID is no longer valid.\n\n");
+      char * write_buffer = (char *)malloc(4096);
       ssize_t len = rpdu->to_bytes(&write_buffer);
       SSL_write(conn, write_buffer, len);  
+      free(write_buffer);
    } else {
       bool can_continue = tables[table_id]->hit(conn);
       if (can_continue) {
@@ -514,8 +526,10 @@ bool handle_stand(PDU* p, SSL* conn) {
    }
    conn_to_state[conn] = WAIT_FOR_DEALER;
    ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 1, 0, "You stand.\n\n");
+   char * write_buffer = (char *)malloc(4096);
    ssize_t len = rpdu->to_bytes(&write_buffer);
    SSL_write(conn, write_buffer, len);
+   free(write_buffer);
    return true;
 }
 
