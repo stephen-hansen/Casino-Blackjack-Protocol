@@ -519,6 +519,37 @@ bool handle_hit(PDU* p, SSL* conn) {
    return true;
 }
 
+bool handle_doubledown(PDU* p, SSL* conn) {
+   DoubleDownPDU* pdu = dynamic_cast<DoubleDownPDU*>(p);
+   if (!pdu) {
+      return false;
+   }
+   uint32_t table_id = conn_to_table_id[conn];
+   if (tables.find(table_id) == tables.end()) {
+      ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Table ID is no longer valid.\n\n");
+      char * write_buffer = (char *)malloc(4096);
+      ssize_t len = rpdu->to_bytes(&write_buffer);
+      SSL_write(conn, write_buffer, len);  
+      free(write_buffer);
+   } else {
+      PlayerInfo* pi = tables[table_id]->getPlayerInfo(conn);
+      uint32_t orig_bet = pi->getBet();
+      if (orig_bet > user_info[conn_to_user[conn]]->getBalance()) {
+         char * write_buffer = (char *)malloc(4096);
+         ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "You do not have sufficient funds to double down.\n\n");
+         ssize_t len = rpdu->to_bytes(&write_buffer);
+         SSL_write(conn, write_buffer, len);
+         free(write_buffer);
+         return true;
+      }
+      pi->setBet(orig_bet*2);
+      user_info[conn_to_user[conn]]->adjustBalance(orig_bet);
+      tables[table_id]->hit(conn);
+      conn_to_state[conn] = WAIT_FOR_DEALER;
+   }
+   return true;
+}
+
 bool handle_stand(PDU* p, SSL* conn) {
    StandPDU* pdu = dynamic_cast<StandPDU*>(p);
    if (!pdu) {

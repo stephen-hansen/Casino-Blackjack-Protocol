@@ -408,6 +408,9 @@ static void connection_handler()
          if (handle_stand(p, ssl)) {
             continue;
          }
+         if (handle_doubledown(p, ssl)) {
+            continue;
+         }
          ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
          ssize_t len = rpdu->to_bytes(&write_buffer);
          SSL_write(ssl, write_buffer, len);
