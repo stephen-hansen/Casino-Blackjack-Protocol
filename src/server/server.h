@@ -17,7 +17,7 @@
 #include "../protocol/pdu.h"
 
 char * write_buffer = (char *)malloc(4096);
-std::map<std::string, std::string> auth_credentials = {{"foo", "bar"}, {"sph77", "admin"}};
+std::map<std::string, std::string> auth_credentials = {{"foo", "bar"}, {"sph77", "admin"}, {"kain", "itdepends"}};
 std::map<SSL*, std::string> conn_to_user;
 std::map<SSL*, STATE> conn_to_state;
 
@@ -275,14 +275,6 @@ class TableDetails
             out += "true";
          } else {
             out += "false";
-         }
-         out += "\nsurrender:";
-         if (surrender == NONE) {
-            out += "none";
-         } else if (surrender == LATE) {
-            out += "late";
-         } else if (surrender == EARLY) {
-            out += "early";
          }
          out += "\n\n";
          return out;
