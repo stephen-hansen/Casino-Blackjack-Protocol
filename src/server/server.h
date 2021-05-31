@@ -121,6 +121,13 @@ uint8_t get_value(uint8_t soft_value, uint8_t hard_value) {
    }
 }
 
+void broadcast(std::string message, std::vector<SSL*> players) {
+   ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(1, 1, 5, message);
+   ssize_t len = rpdu->to_bytes(&write_buffer);
+   for (auto ssl : players) {
+      SSL_write(ssl, write_buffer, len);
+   }
+}
 
 class TableDetails
 {
@@ -130,6 +137,7 @@ class TableDetails
       std::vector<SSL*> pending_players;
       std::vector<CardPDU*> deck;
       std::vector<CardPDU*> dealer_hand;
+      uint8_t dealer_value = 0;
       std::thread game_thread;
       bool is_running = false;
       uint8_t player_action_count = 0;
@@ -166,23 +174,33 @@ class TableDetails
             // Round started, wait on bets
             std::this_thread::sleep_for(std::chrono::seconds(15));
             // Okay, moving to WAIT_FOR_TURN
+            broadcast("Starting round...\n\n", players);
             for (auto player : players) {
                conn_to_state[player] = WAIT_FOR_TURN;
-               // TODO msg
+               hit(player);
             }
-            // Now to go through each player, get their turn. Giving 60 seconds for actions.
+            // Get dealer hit
+            hit_dealer();
+
+            // Get second hit
+            for (auto player : players) {
+               hit(player);
+            }
+
+            // Now to go through each player, get their turn. Giving 30 seconds for actions.
             for (auto player : players) {
                conn_to_state[player] = START_TURN;
                // TODO msg
-               std::this_thread::sleep_for(std::chrono::seconds(60));
+               std::this_thread::sleep_for(std::chrono::seconds(30));
             }
             // Now all players have made their moves
             // Time to play the dealer strategy
             mtx.lock();
-            // TODO
-            mtx.unlock();
+            // Keep hitting until you cannot any more
+            while (hit_dealer()) {}
+            // Calculate payouts
             // Dealer done, update balances, new round
-            // TODO
+            mtx.unlock();
          }
       }
       PlayerInfo* getPlayerInfo(SSL* conn) {
@@ -220,10 +238,19 @@ class TableDetails
          out += "\n\n";
          return out;
       }
+      bool betInRange(uint32_t amt) {
+         return (amt >= bet_min) && (amt <= bet_max);
+      }
       bool add_player(SSL* player) {
          mtx.lock();
-         bool ret = !is_running;
-         if (ret) {
+         if (players.size() + pending_players.size() == max_players) {
+            ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(4, 1, 3, "Table provided is full, try again later.\n\n");
+            ssize_t len = rpdu->to_bytes(&write_buffer);
+            SSL_write(player, write_buffer, len);
+            mtx.unlock();
+            return false;
+         }
+         if (!is_running) {
             is_running = true;
             players.push_back(player);
             player_info[player] = new PlayerInfo();
@@ -241,7 +268,7 @@ class TableDetails
             SSL_write(player, write_buffer, len);
          }
          mtx.unlock();
-         return ret; // True if game just started, False if game is already running
+         return true;
       }
       bool remove_player(SSL* player) {
          bool ret = false;
@@ -253,7 +280,7 @@ class TableDetails
             pending_players.erase(std::remove(pending_players.begin(), pending_players.end(), player), pending_players.end());
             ret = true;
          }
-         // TODO shutdown thread if no one playing
+         // TODO shutdown thread if no one playing 
          mtx.unlock();
          return ret;
       }
@@ -275,18 +302,73 @@ class TableDetails
       }
       bool hit(SSL* player) {
          mtx.lock();
+         bool ret = true;
          if (deck.size() == 0) {
             init_deck();
          }
          player_info[player]->addCard(deck.back());
+         deck.pop_back();
          std::vector<CardPDU*> player_hand = player_info[player]->getHand();
          uint8_t soft_value = get_soft_value(player_hand);
          uint8_t hard_value = get_hard_value(player_hand);
          uint8_t value = get_value(soft_value, hard_value);
-         // TODO check if 21 or bust, send response
-         deck.pop_back();
+         uint8_t rc3 = 1;
+         if (value == 21) {
+            if (player_hand.size() == 2) {
+               rc3 = 4;
+            } else {
+               rc3 = 6;
+            }
+            ret = false;
+         } else if (value > 21) {
+            rc3 = 2;
+            ret = false;
+         }
+         CardHandResponsePDU* chr_pdu = new CardHandResponsePDU(1,1,rc3,1,soft_value,hard_value,player_hand);
+         ssize_t len = chr_pdu->to_bytes(&write_buffer);
+         SSL_write(player, write_buffer, len);
          mtx.unlock();
-         return true;
+         return ret;
+      }
+      bool hit_dealer() {
+         mtx.lock();
+         bool ret = true;
+         if (deck.size() == 0) {
+            init_deck();
+         }
+         dealer_hand.push_back(deck.back());
+         deck.pop_back();
+         uint8_t soft_value = get_soft_value(dealer_hand);
+         uint8_t hard_value = get_hard_value(dealer_hand);
+         uint8_t value = get_value(soft_value, hard_value);
+         uint8_t rc1 = 1;
+         uint8_t rc3 = 1;
+         if (value == 21) {
+            if (dealer_hand.size() == 2) {
+               rc3 = 4;
+            } else {
+               rc1 = 3;
+               rc3 = 3;
+            }
+            ret = false;
+         } else if (value > 21) {
+            rc3 = 2;
+            ret = false;
+         } else if (value >= 18 || hard_value == 17) {
+            // Dealer never hits on hard 17, or hard/soft 18 or higher
+            ret = false;
+         } else if (!hit_soft_17 && soft_value == 17) {
+            // Do not hit again on the soft 17
+            ret = false;
+         }
+         dealer_value = value;
+         CardHandResponsePDU* chr_pdu = new CardHandResponsePDU(rc1,1,rc3,0,soft_value,hard_value,dealer_hand);
+         ssize_t len = chr_pdu->to_bytes(&write_buffer);
+         for (auto player : players) {
+            SSL_write(player, write_buffer, len);
+         }
+         mtx.unlock();
+         return ret;
       }
 };
 
@@ -344,6 +426,31 @@ bool handle_hit(PDU* p, SSL* conn) {
    if (!pdu) {
       return false;
    }
+   uint32_t table_id = conn_to_table_id[conn];
+   if (tables.find(table_id) == tables.end()) {
+      ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Table ID is no longer valid.\n\n");
+      ssize_t len = rpdu->to_bytes(&write_buffer);
+      SSL_write(conn, write_buffer, len);  
+   } else {
+      bool can_continue = tables[table_id]->hit(conn);
+      if (can_continue) {
+         conn_to_state[conn] = TURN;
+      } else {
+         conn_to_state[conn] = WAIT_FOR_DEALER;
+      }
+   }
+   return true;
+}
+
+bool handle_stand(PDU* p, SSL* conn) {
+   StandPDU* pdu = dynamic_cast<StandPDU*>(p);
+   if (!pdu) {
+      return false;
+   }
+   conn_to_state[conn] = WAIT_FOR_DEALER;
+   ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 1, 0, "You stand.\n\n");
+   ssize_t len = rpdu->to_bytes(&write_buffer);
+   SSL_write(conn, write_buffer, len);
    return true;
 }
 

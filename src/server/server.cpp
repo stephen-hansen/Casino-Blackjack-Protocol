@@ -360,9 +360,18 @@ static void connection_handler()
             conn_to_state[ssl] = WAIT_FOR_TURN;
             uint32_t amt = b_pdu->getBetAmount();
             if (amt > user_info[conn_to_user[ssl]]->getBalance()) {
+               ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "You do not have sufficient funds to make this bet.\n\n");
+               ssize_t len = rpdu->to_bytes(&write_buffer);
+               SSL_write(ssl, write_buffer, len);
                continue;
             }
             uint16_t table_id = conn_to_table_id[ssl];
+            if (!tables[table_id]->betInRange(amt)) {
+               ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Bet not in range allowed by table.\n\n");
+               ssize_t len = rpdu->to_bytes(&write_buffer);
+               SSL_write(ssl, write_buffer, len);
+               continue;
+            }
             PlayerInfo* pi = tables[table_id]->getPlayerInfo(ssl);
             pi->setBet(amt);
             user_info[conn_to_user[ssl]]->adjustBalance(-amt);
@@ -411,6 +420,12 @@ static void connection_handler()
          if (handle_leavetable(p, ssl)) {
             continue;
          }
+         if (handle_hit(p, ssl)) {
+            continue;
+         }
+         if (handle_stand(p, ssl)) {
+            continue;
+         }
          ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
          ssize_t len = rpdu->to_bytes(&write_buffer);
          SSL_write(ssl, write_buffer, len);
@@ -422,6 +437,12 @@ static void connection_handler()
             continue;
          }
          if (handle_leavetable(p, ssl)) {
+            continue;
+         }
+         if (handle_hit(p, ssl)) {
+            continue;
+         }
+         if (handle_stand(p, ssl)) {
             continue;
          }
          ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
