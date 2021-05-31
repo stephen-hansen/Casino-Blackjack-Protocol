@@ -44,6 +44,8 @@ class AccountDetails
       }
 };
 
+std::map<std::string, AccountDetails*> user_info;
+
 enum SurrenderOptions {
    NONE,
    LATE,
@@ -54,6 +56,7 @@ class PlayerInfo
 {
    std::mutex mtx;
    uint32_t bet = 0;
+   uint8_t hand_value;
    std::vector<CardPDU*> hand;
    public:
       PlayerInfo() {}
@@ -62,10 +65,21 @@ class PlayerInfo
          bet = b;
          mtx.unlock();
       }
+      uint32_t getBet() {
+         return bet;
+      }
       void addCard(CardPDU* c) {
          mtx.lock();
          hand.push_back(c);
          mtx.unlock();
+      }
+      void setValue(uint8_t v) {
+         mtx.lock();
+         hand_value = v;
+         mtx.unlock();
+      }
+      uint8_t getValue() {
+         return hand_value;
       }
       void clearHand() {
          mtx.lock();
@@ -174,6 +188,7 @@ class TableDetails
                // Move player to ENTER_BETS
                conn_to_state[player] = ENTER_BETS;
             }
+            broadcast("Accepting bets!\n\n", players);
             pending_players.clear();
             dealer_hand.clear();
             mtx.unlock();
@@ -183,28 +198,58 @@ class TableDetails
             broadcast("Starting round...\n\n", players);
             for (auto player : players) {
                player_info[player]->clearHand();
-               conn_to_state[player] = WAIT_FOR_TURN;
-               hit(player);
+               if (player_info[player]->getBet() > 0) {
+                  conn_to_state[player] = WAIT_FOR_TURN;
+                  hit(player);
+               } else {
+                  conn_to_state[player] = IN_PROGRESS;
+               }
             }
             // Get dealer hit
             hit_dealer();
 
             // Get second hit
             for (auto player : players) {
-               hit(player);
+               if (player_info[player]->getBet() > 0) {
+                  hit(player);
+               }
             }
 
             // Now to go through each player, get their turn. Giving 30 seconds for actions.
             for (auto player : players) {
-               conn_to_state[player] = START_TURN;
-               // TODO msg
-               std::this_thread::sleep_for(std::chrono::seconds(30));
+               if (player_info[player]->getBet() > 0) {
+                  conn_to_state[player] = START_TURN;
+                  broadcast("It is " + conn_to_user[player] + "'s turn.\n\n", players);
+                  ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(3, 1, 2, "It is your turn!\n\n");
+                  ssize_t len = rpdu->to_bytes(&write_buffer);
+                  SSL_write(player, write_buffer, len);
+                  std::this_thread::sleep_for(std::chrono::seconds(30));
+               }
             }
             // Now all players have made their moves
             // Time to play the dealer strategy
             // Keep hitting until you cannot any more
             while (hit_dealer()) {}
             // Calculate payouts
+            for (auto player : players) {
+               uint32_t bet = player_info[player]->getBet();
+               uint32_t payout = 0;
+               if (bet > 0) {
+                  // TODO blackjack value
+                  uint8_t value = player_info[player]->getValue();
+                  if (value <= 21) { // Did not bust
+                     if (dealer_value > 21 || value > dealer_value) { // Dealer bust, or you beat the dealer
+                        payout = (bet*payoff_high)/payoff_low;
+                     } else if (dealer_value == value) { // Tie
+                        payout = bet;
+                     }
+                  }
+                  // Update balance
+                  player_info[player]->setBet(0);
+                  user_info[conn_to_user[player]]->adjustBalance(payout);
+                  // TODO inform winnings
+               }
+            }
             // Dealer done, update balances, new round
          }
       }
@@ -212,7 +257,6 @@ class TableDetails
          return player_info[conn];
       }
       std::string to_string() {
-         // TODO fix ascii encoding of numbers
          std::string out = "";
          out += "max-players:";
          out += std::to_string(max_players);
@@ -268,6 +312,7 @@ class TableDetails
          } else {
             conn_to_state[player] = IN_PROGRESS;
             pending_players.push_back(player); // Player joins in next round
+            broadcast(conn_to_user[player] + " is joining in the next round.\n\n", players);
             ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(1, 1, 0, "Game in progress, please wait for next round.\n\n");
             ssize_t len = rpdu->to_bytes(&write_buffer);
             SSL_write(player, write_buffer, len);
@@ -285,6 +330,7 @@ class TableDetails
             pending_players.erase(std::remove(pending_players.begin(), pending_players.end(), player), pending_players.end());
             ret = true;
          }
+         broadcast(conn_to_user[player] + " has left! Bye!\n\n", players);
          // TODO shutdown thread if no one playing 
          mtx.unlock();
          return ret;
@@ -317,6 +363,7 @@ class TableDetails
          uint8_t soft_value = get_soft_value(player_hand);
          uint8_t hard_value = get_hard_value(player_hand);
          uint8_t value = get_value(soft_value, hard_value);
+         player_info[player]->setValue(value);
          uint8_t rc3 = 1;
          if (value == 21) {
             if (player_hand.size() == 2) {
@@ -377,7 +424,6 @@ class TableDetails
       }
 };
 
-std::map<std::string, AccountDetails*> user_info;
 std::map<uint16_t, TableDetails*> tables = {{0, new TableDetails()}}; 
 std::map<SSL*, uint16_t> conn_to_table_id;
 
