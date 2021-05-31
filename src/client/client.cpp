@@ -147,7 +147,22 @@ int main(int argc, char const *argv[])
       std::vector<std::string> tokens;
       std::copy(std::istream_iterator<std::string>(iss), std::istream_iterator<std::string>(), std::back_inserter(tokens));
       if (tokens.size() < 1) {
-         std::cout << "expected: <command> (<arg1> <arg2> <arg3> ...)" << std::endl;
+         std::cout << "Available commands:" << std::endl;
+         std::cout << "> user <username>" << std::endl;
+         std::cout << "> pass <password>" << std::endl;
+         std::cout << "> balance" << std::endl;
+         std::cout << "> adjust <funds>" << std::endl;
+         std::cout << "> quit" << std::endl;
+         std::cout << "> list" << std::endl;
+         std::cout << "> add" << std::endl;
+         std::cout << "> remove <table id>" << std::endl;
+         std::cout << "> join <table id>" << std::endl;
+         std::cout << "> leave" << std::endl;
+         std::cout << "> bet <amount>" << std::endl;
+         std::cout << "> hit" << std::endl;
+         std::cout << "> stand" << std::endl;
+         std::cout << "> double" << std::endl;
+         std::cout << "> chat <msg>" << std::endl;
          continue;
       }
       std::string command = tokens[0];
@@ -173,16 +188,16 @@ int main(int argc, char const *argv[])
          } else {
             std::cout << "expected: pass <password>" << std::endl;
          }
-      } else if (command == "getbalance") {
+      } else if (command == "balance") {
          if (tokens.size() == 1) {
             GetBalancePDU *gb_pdu = new GetBalancePDU();
             ssize_t len = gb_pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
             delete gb_pdu;
          } else {
-            std::cout << "expected: getbalance" << std::endl;
+            std::cout << "expected: balance" << std::endl;
          }
-      } else if (command == "updatebalance") {
+      } else if (command == "adjust") {
          if (tokens.size() == 2) {
             std::string funds_str = tokens[1];
             int32_t funds = stoi(funds_str);
@@ -191,7 +206,7 @@ int main(int argc, char const *argv[])
             SSL_write(ssl, write_buffer, len);
             delete ub_pdu;
          } else {
-            std::cout << "expected: updatebalance <funds>" << std::endl;
+            std::cout << "expected: adjust <funds>" << std::endl;
          }
       } else if (command == "quit") {
          if (tokens.size() == 1) {
@@ -203,18 +218,18 @@ int main(int argc, char const *argv[])
          } else {
             std::cout << "expected: quit" << std::endl;
          }
-      } else if (command == "gettables") {
+      } else if (command == "list") {
          if (tokens.size() == 1) {
             GetTablesPDU *send_pdu = new GetTablesPDU();
             ssize_t len = send_pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
             delete send_pdu;
          } else {
-            std::cout << "expected: gettables" << std::endl;
+            std::cout << "expected: list" << std::endl;
          }
-      } else if (command == "addtable") {
+      } else if (command == "add") {
          // TODO interactive
-      } else if (command == "removetable") {
+      } else if (command == "remove") {
          if (tokens.size() == 2) {
             std::string id_str = tokens[1];
             uint16_t id = stoi(id_str);
@@ -223,9 +238,9 @@ int main(int argc, char const *argv[])
             SSL_write(ssl, write_buffer, len);
             delete rt_pdu;
          } else {
-            std::cout << "expected: removetable <table id>" << std::endl;
+            std::cout << "expected: remove <table id>" << std::endl;
          }
-      } else if (command == "jointable") {
+      } else if (command == "join") {
          if (tokens.size() == 2) {
             std::string id_str = tokens[1];
             uint16_t id = stoi(id_str);
@@ -234,16 +249,16 @@ int main(int argc, char const *argv[])
             SSL_write(ssl, write_buffer, len);
             delete jt_pdu;
          } else {
-            std::cout << "expected: jointable <table id>" << std::endl;
+            std::cout << "expected: join <table id>" << std::endl;
          }
-      } else if (command == "leavetable") {
+      } else if (command == "leave") {
          if (tokens.size() == 1) {
             LeaveTablePDU *send_pdu = new LeaveTablePDU();
             ssize_t len = send_pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
             delete send_pdu;
          } else {
-            std::cout << "expected: leavetable" << std::endl;
+            std::cout << "expected: leave" << std::endl;
          }
       } else if (command == "bet") {
          if (tokens.size() == 2) {
@@ -255,25 +270,6 @@ int main(int argc, char const *argv[])
             delete b_pdu;
          } else {
             std::cout << "expected: bet <amount>" << std::endl;
-         }
-      } else if (command == "insurance") {
-         if (tokens.size() == 2) {
-            std::string accepted_str = tokens[1];
-            uint8_t accepted;
-            if (accepted_str == "yes") {
-               accepted = 1;
-            } else if (accepted_str == "no") {
-               accepted = 0;
-            } else {
-               std::cout << "expected: insurance (yes/no)" << std::endl;
-               continue;
-            }
-            InsurancePDU *i_pdu = new InsurancePDU(accepted);
-            ssize_t len = i_pdu->to_bytes(&write_buffer);
-            SSL_write(ssl, write_buffer, len);
-            delete i_pdu;
-         } else {
-            std::cout << "expected: insurance (yes/no)" << std::endl;
          }
       } else if (command == "hit") {
          if (tokens.size() == 1) {
@@ -293,32 +289,14 @@ int main(int argc, char const *argv[])
          } else {
             std::cout << "expected: stand" << std::endl;
          }
-      } else if (command == "doubledown") {
+      } else if (command == "double") {
          if (tokens.size() == 1) {
             DoubleDownPDU *send_pdu = new DoubleDownPDU();
             ssize_t len = send_pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
             delete send_pdu;
          } else {
-            std::cout << "expected: doubledown" << std::endl;
-         }
-      } else if (command == "split") {
-         if (tokens.size() == 1) {
-            SplitPDU *send_pdu = new SplitPDU();
-            ssize_t len = send_pdu->to_bytes(&write_buffer);
-            SSL_write(ssl, write_buffer, len);
-            delete send_pdu;
-         } else {
-            std::cout << "expected: split" << std::endl;
-         }
-      } else if (command == "surrender") {
-         if (tokens.size() == 1) {
-            SurrenderPDU *send_pdu = new SurrenderPDU();
-            ssize_t len = send_pdu->to_bytes(&write_buffer);
-            SSL_write(ssl, write_buffer, len);
-            delete send_pdu;
-         } else {
-            std::cout << "expected: surrender" << std::endl;
+            std::cout << "expected: double" << std::endl;
          }
       } else if (command == "chat") {
          if (tokens.size() > 1) {
@@ -339,28 +317,23 @@ int main(int argc, char const *argv[])
          } else {
             std::cout << "expected: chat <msg>" << std::endl;
          }
-      } else if (command == "help") {
-         std::cout << "Available commands:" << std::endl;
-         std::cout << "user <username>" << std::endl;
-         std::cout << "pass <password>" << std::endl;
-         std::cout << "getbalance" << std::endl;
-         std::cout << "updatebalance <funds>" << std::endl;
-         std::cout << "quit" << std::endl;
-         std::cout << "gettables" << std::endl;
-         std::cout << "addtable" << std::endl;
-         std::cout << "removetable <table id>" << std::endl;
-         std::cout << "jointable <table id>" << std::endl;
-         std::cout << "leavetable" << std::endl;
-         std::cout << "bet <amount>" << std::endl;
-         std::cout << "insurance (yes/no)" << std::endl;
-         std::cout << "hit" << std::endl;
-         std::cout << "stand" << std::endl;
-         std::cout << "doubledown" << std::endl;
-         std::cout << "split" << std::endl;
-         std::cout << "surrender" << std::endl;
-         std::cout << "chat <msg>" << std::endl;
       } else {
-         std::cout << "Invalid command" << std::endl;
+         std::cout << "Available commands:" << std::endl;
+         std::cout << "> user <username>" << std::endl;
+         std::cout << "> pass <password>" << std::endl;
+         std::cout << "> balance" << std::endl;
+         std::cout << "> adjust <funds>" << std::endl;
+         std::cout << "> quit" << std::endl;
+         std::cout << "> list" << std::endl;
+         std::cout << "> add" << std::endl;
+         std::cout << "> remove <table id>" << std::endl;
+         std::cout << "> join <table id>" << std::endl;
+         std::cout << "> leave" << std::endl;
+         std::cout << "> bet <amount>" << std::endl;
+         std::cout << "> hit" << std::endl;
+         std::cout << "> stand" << std::endl;
+         std::cout << "> double" << std::endl;
+         std::cout << "> chat <msg>" << std::endl;
       }
    }
    SSL_free(ssl);

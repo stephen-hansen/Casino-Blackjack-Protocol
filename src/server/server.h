@@ -218,7 +218,7 @@ class TableDetails
             // Now to go through each player, get their turn. Giving 30 seconds for actions.
             for (auto player : players) {
                if (player_info[player]->getBet() > 0) {
-                  conn_to_state[player] = START_TURN;
+                  conn_to_state[player] = TURN;
                   broadcast("It is " + conn_to_user[player] + "'s turn.\n\n", players);
                   ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(3, 1, 2, "It is your turn!\n\n");
                   ssize_t len = rpdu->to_bytes(&write_buffer);

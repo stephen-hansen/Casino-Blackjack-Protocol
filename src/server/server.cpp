@@ -397,38 +397,6 @@ static void connection_handler()
          ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
          ssize_t len = rpdu->to_bytes(&write_buffer);
          SSL_write(ssl, write_buffer, len);
-      } else if (conn_to_state[ssl] == INSURANCE) {
-         if (handle_getbalance(p, ssl)) {
-            continue;
-         }
-         if (handle_updatebalance(p, ssl)) {
-            continue;
-         }
-         if (handle_leavetable(p, ssl)) {
-            continue;
-         }
-         ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
-         ssize_t len = rpdu->to_bytes(&write_buffer);
-         SSL_write(ssl, write_buffer, len);
-      } else if (conn_to_state[ssl] == START_TURN) {
-         if (handle_getbalance(p, ssl)) {
-            continue;
-         }
-         if (handle_updatebalance(p, ssl)) {
-            continue;
-         }
-         if (handle_leavetable(p, ssl)) {
-            continue;
-         }
-         if (handle_hit(p, ssl)) {
-            continue;
-         }
-         if (handle_stand(p, ssl)) {
-            continue;
-         }
-         ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "Command not accepted at current state.\n\n");
-         ssize_t len = rpdu->to_bytes(&write_buffer);
-         SSL_write(ssl, write_buffer, len);
       } else if (conn_to_state[ssl] == TURN) {
          if (handle_getbalance(p, ssl)) {
             continue;
