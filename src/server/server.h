@@ -543,7 +543,7 @@ bool handle_doubledown(PDU* p, SSL* conn) {
          return true;
       }
       pi->setBet(orig_bet*2);
-      user_info[conn_to_user[conn]]->adjustBalance(orig_bet);
+      user_info[conn_to_user[conn]]->adjustBalance(-orig_bet);
       tables[table_id]->hit(conn);
       conn_to_state[conn] = WAIT_FOR_DEALER;
    }
