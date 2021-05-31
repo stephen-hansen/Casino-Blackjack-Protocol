@@ -108,7 +108,7 @@ static void setup_libssl()
 {
    SSL_library_init();
    SSL_load_error_strings();
-   ssl_ctx = SSL_CTX_new(SSLv23_server_method());
+   ssl_ctx = SSL_CTX_new(TLS_server_method());
 
    if (NULL == ssl_ctx)
    {

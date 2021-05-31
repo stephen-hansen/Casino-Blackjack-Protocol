@@ -134,22 +134,69 @@ int main(int argc, char const *argv[])
 
    printf("Connected with %s encryption\n", SSL_get_cipher(ssl));
    DisplayCerts(ssl);
-   // Start up a listening thread
-   std::thread listen(listen_to_server,ssl);
    // Send VERSION on connection
    uint32_t version = htonl(1); // Version 1, over big endian
    VersionPDU *version_pdu = new VersionPDU(version);
    ssize_t len = version_pdu->to_bytes(&write_buffer);
    SSL_write(ssl, write_buffer, len);
    delete version_pdu;
-   for (std::string line; std::getline(std::cin, line);) {
+   VersionResponsePDU *vr_pdu = dynamic_cast<VersionResponsePDU*>(parse_pdu_client(ssl));
+   if (!vr_pdu || vr_pdu->getReplyCode1() != 2) {
+      fprintf(stderr, "Client is not running supported version.\n");
+      exit(EXIT_FAILURE);
+   }
+   bool authenticated = false;
+   std::string line;
+   while (!authenticated) {
+      std::cout << "Enter username: ";
+      std::getline(std::cin, line);
+      line.append("\n");
+      UserPDU *user_pdu = new UserPDU(line);
+      ssize_t len = user_pdu->to_bytes(&write_buffer);
+      SSL_write(ssl, write_buffer, len);
+      delete user_pdu;
+      ASCIIResponsePDU *user_resp = dynamic_cast<ASCIIResponsePDU*>(parse_pdu_client(ssl));
+      if (!user_resp || user_resp->getReplyCode1() == 4 || user_resp->getReplyCode1() == 5) {
+         fprintf(stderr, "Got an unexpected error from server.\n");
+         exit(EXIT_FAILURE);
+      }
+      std::cout << "Enter password: ";
+      std::getline(std::cin, line);
+      line.append("\n");
+      PassPDU *pass_pdu = new PassPDU(line);
+      len = pass_pdu->to_bytes(&write_buffer);
+      SSL_write(ssl, write_buffer, len);
+      delete pass_pdu;
+      ASCIIResponsePDU *pass_resp = dynamic_cast<ASCIIResponsePDU*>(parse_pdu_client(ssl));
+      if (!pass_resp || pass_resp->getReplyCode1() != 2) {
+         std::cout << "Invalid username/password" << std::endl;
+      } else {
+         std::cout << "Successfully authenticated" << std::endl;
+         authenticated = true;
+      }
+   }
+   // Start up a listening thread
+   std::thread listen(listen_to_server,ssl);
+   std::cout << "Available commands:" << std::endl;
+   std::cout << "> balance" << std::endl;
+   std::cout << "> adjust <funds>" << std::endl;
+   std::cout << "> quit" << std::endl;
+   std::cout << "> list" << std::endl;
+   std::cout << "> add" << std::endl;
+   std::cout << "> remove <table id>" << std::endl;
+   std::cout << "> join <table id>" << std::endl;
+   std::cout << "> leave" << std::endl;
+   std::cout << "> bet <amount>" << std::endl;
+   std::cout << "> hit" << std::endl;
+   std::cout << "> stand" << std::endl;
+   std::cout << "> double" << std::endl;
+   std::cout << "> chat <msg>" << std::endl;
+   for (; std::getline(std::cin, line);) {
       std::istringstream iss(line);
       std::vector<std::string> tokens;
       std::copy(std::istream_iterator<std::string>(iss), std::istream_iterator<std::string>(), std::back_inserter(tokens));
       if (tokens.size() < 1) {
          std::cout << "Available commands:" << std::endl;
-         std::cout << "> user <username>" << std::endl;
-         std::cout << "> pass <password>" << std::endl;
          std::cout << "> balance" << std::endl;
          std::cout << "> adjust <funds>" << std::endl;
          std::cout << "> quit" << std::endl;
@@ -166,29 +213,7 @@ int main(int argc, char const *argv[])
          continue;
       }
       std::string command = tokens[0];
-      if (command == "user") {
-         if (tokens.size() == 2) {
-            std::string username = tokens[1];
-            username.append("\n");
-            UserPDU *user_pdu = new UserPDU(username);
-            ssize_t len = user_pdu->to_bytes(&write_buffer);
-            SSL_write(ssl, write_buffer, len);
-            delete user_pdu;
-         } else {
-            std::cout << "expected: user <username>" << std::endl;
-         }
-      } else if (command == "pass") {
-         if (tokens.size() == 2) {
-            std::string password = tokens[1];
-            password.append("\n");
-            PassPDU *pass_pdu = new PassPDU(password);
-            ssize_t len = pass_pdu->to_bytes(&write_buffer);
-            SSL_write(ssl, write_buffer, len);
-            delete pass_pdu;
-         } else {
-            std::cout << "expected: pass <password>" << std::endl;
-         }
-      } else if (command == "balance") {
+      if (command == "balance") {
          if (tokens.size() == 1) {
             GetBalancePDU *gb_pdu = new GetBalancePDU();
             ssize_t len = gb_pdu->to_bytes(&write_buffer);
@@ -319,8 +344,6 @@ int main(int argc, char const *argv[])
          }
       } else {
          std::cout << "Available commands:" << std::endl;
-         std::cout << "> user <username>" << std::endl;
-         std::cout << "> pass <password>" << std::endl;
          std::cout << "> balance" << std::endl;
          std::cout << "> adjust <funds>" << std::endl;
          std::cout << "> quit" << std::endl;
