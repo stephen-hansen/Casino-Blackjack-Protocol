@@ -12,6 +12,7 @@
 #include <chrono>
 #include <thread>
 #include <vector>
+#include <iostream>
 
 #include "../protocol/dfa.h"
 #include "../protocol/pdu.h"
@@ -146,6 +147,7 @@ void broadcast(std::string message, std::vector<SSL*> players) {
    for (auto ssl : players) {
       SSL_write(ssl, write_buffer, len);
    }
+   delete rpdu;
 }
 
 class TableDetails
@@ -218,12 +220,18 @@ class TableDetails
             // Now to go through each player, get their turn. Giving 30 seconds for actions.
             for (auto player : players) {
                if (player_info[player]->getBet() > 0) {
-                  conn_to_state[player] = TURN;
-                  broadcast("It is " + conn_to_user[player] + "'s turn.\n\n", players);
-                  ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(3, 1, 2, "It is your turn!\n\n");
-                  ssize_t len = rpdu->to_bytes(&write_buffer);
-                  SSL_write(player, write_buffer, len);
-                  std::this_thread::sleep_for(std::chrono::seconds(30));
+                  if (player_info[player]->getHand().size() == 2 && player_info[player]->getValue() == 21) {
+                     conn_to_state[player] = WAIT_FOR_DEALER;
+                     broadcast("Player " + conn_to_user[player] + " has a natural blackjack! Skipping turn.\n\n", players);
+                  } else {
+                     conn_to_state[player] = TURN;
+                     broadcast("It is " + conn_to_user[player] + "'s turn.\n\n", players);
+                     ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(3, 1, 2, "It is your turn!\n\n");
+                     ssize_t len = rpdu->to_bytes(&write_buffer);
+                     SSL_write(player, write_buffer, len);
+                     delete rpdu;
+                     std::this_thread::sleep_for(std::chrono::seconds(30));
+                  }
                }
             }
             // Now all players have made their moves
@@ -235,7 +243,6 @@ class TableDetails
                uint32_t bet = player_info[player]->getBet();
                uint32_t payout = 0;
                if (bet > 0) {
-                  // TODO blackjack value
                   uint8_t value = player_info[player]->getValue();
                   if (value <= 21) { // Did not bust
                      if (dealer_value > 21 || value > dealer_value) { // Dealer bust, or you beat the dealer
@@ -247,10 +254,15 @@ class TableDetails
                   // Update balance
                   player_info[player]->setBet(0);
                   user_info[conn_to_user[player]]->adjustBalance(payout);
-                  // TODO inform winnings
+                  WinningsResponsePDU* win_pdu = new WinningsResponsePDU(3,1,3,htonl(payout));
+                  ssize_t len = win_pdu->to_bytes(&write_buffer);
+                  SSL_write(player, write_buffer, len);
                }
             }
-            // Dealer done, update balances, new round
+            // Dealer done, new round
+            for (auto player : players) {
+               conn_to_state[player] = ENTER_BETS;
+            }
          }
       }
       PlayerInfo* getPlayerInfo(SSL* conn) {
@@ -411,6 +423,7 @@ class TableDetails
          for (auto player : players) {
             SSL_write(player, write_buffer, len);
          }
+         delete chr_pdu;
          mtx.unlock();
          return ret;
       }

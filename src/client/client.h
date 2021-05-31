@@ -130,8 +130,7 @@ PDU* parse_pdu_client(SSL* ssl) {
          // Convert to string, create pdu
          pdu = new JoinTableResponsePDU(rc1,rc2,rc3,std::string(message_buf));
       }
-   } else if ((rc1 == 1 && rc2 == 1 && (rc3 >= 1 && rc3 <= 6 && rc3 != 5)) ||
-         (rc1 == 3 && rc2 == 1 && rc3 == 2)) {
+   } else if (rc1 == 1 && rc2 == 1 && (rc3 >= 1 && rc3 <= 6 && rc3 != 5)) {
       // Handle card response
       uint8_t holder;
       uint8_t soft_value;
