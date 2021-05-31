@@ -256,17 +256,27 @@ void listen_to_server(SSL* ssl) {
       }
       CardHandResponsePDU* chr_pdu = dynamic_cast<CardHandResponsePDU*>(p);
       if (chr_pdu) {
-         std::cout << "holder=";
          if (chr_pdu->getHolder()) {
-            std::cout << "you";
+            std::cout << "Your hand:";
          } else {
-            std::cout << "dealer";
+            std::cout << "Dealer's hand:";
          }
-         std::cout << ", soft value=" << chr_pdu->getSoftValue() << ", hard value=" << chr_pdu->getHardValue() << std::endl;
-         std::cout << "Cards:";
          std::vector<CardPDU*> cards = chr_pdu->getCards();
          for (auto card : cards) {
             std::cout << " " << card->getRank() << card->getSuit();
+         }
+         uint8_t soft_value = chr_pdu->getSoftValue();
+         uint8_t hard_value = chr_pdu->getHardValue();
+         if (soft_value == 21) {
+            std::cout << " (blackjack)";
+         } else if (hard_value == 21) {
+            std::cout << " (21)";
+         } else if (soft_value < 21 && soft_value != hard_value) {
+            std::cout << " (soft " << std::to_string(soft_value) << ")";
+         } else if (hard_value < 21) {
+            std::cout << " (" << std::to_string(hard_value) << ")";
+         } else {
+            std::cout << " (bust)";
          }
          std::cout << std::endl;
          continue;

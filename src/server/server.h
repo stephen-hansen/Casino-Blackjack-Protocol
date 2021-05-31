@@ -67,6 +67,11 @@ class PlayerInfo
          hand.push_back(c);
          mtx.unlock();
       }
+      void clearHand() {
+         mtx.lock();
+         hand.clear();
+         mtx.unlock();
+      }
       std::vector<CardPDU*> getHand() {
          return hand;
       }
@@ -170,12 +175,14 @@ class TableDetails
                conn_to_state[player] = ENTER_BETS;
             }
             pending_players.clear();
+            dealer_hand.clear();
             mtx.unlock();
             // Round started, wait on bets
             std::this_thread::sleep_for(std::chrono::seconds(15));
             // Okay, moving to WAIT_FOR_TURN
             broadcast("Starting round...\n\n", players);
             for (auto player : players) {
+               player_info[player]->clearHand();
                conn_to_state[player] = WAIT_FOR_TURN;
                hit(player);
             }
@@ -195,12 +202,10 @@ class TableDetails
             }
             // Now all players have made their moves
             // Time to play the dealer strategy
-            mtx.lock();
             // Keep hitting until you cannot any more
             while (hit_dealer()) {}
             // Calculate payouts
             // Dealer done, update balances, new round
-            mtx.unlock();
          }
       }
       PlayerInfo* getPlayerInfo(SSL* conn) {

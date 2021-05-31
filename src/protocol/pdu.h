@@ -687,7 +687,7 @@ class CardHandResponsePDU: public PDU
          header.holder = holder;
          header.soft_value = soft_value;
          header.hard_value = hard_value;
-         header.number_of_cards = (uint8_t)cards.size();
+         header.number_of_cards = (uint8_t)c.size();
          cards = c;
       }
       uint8_t getReplyCode1() {
