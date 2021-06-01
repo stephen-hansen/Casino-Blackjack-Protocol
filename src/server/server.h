@@ -239,10 +239,10 @@ class TableDetails
                // Move player to ENTER_BETS
                conn_to_state[player] = ENTER_BETS;
             }
-            broadcast("Accepting bets!\n\n");
             pending_players.clear();
-            dealer_hand.clear();
             mtx.unlock();
+            broadcast("Accepting bets!\n\n");
+            dealer_hand.clear();
             // Round started, wait on bets
             std::this_thread::sleep_for(std::chrono::seconds(15));
             // Okay, moving to WAIT_FOR_TURN
