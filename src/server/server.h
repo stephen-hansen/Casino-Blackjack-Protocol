@@ -21,6 +21,7 @@ std::map<std::string, std::string> auth_credentials = {{"foo", "bar"}, {"sph77",
 std::map<SSL*, std::string> conn_to_user;
 std::map<SSL*, STATE> conn_to_state;
 
+// Basic structure is taken from http://cs.baylor.edu/~donahoo/practical/CSockets/code/BroadcastReceiver.c
 void handle_broadcast(std::string port, std::string service_port) {
    int sock;
    struct sockaddr_in broadcastAddr;
