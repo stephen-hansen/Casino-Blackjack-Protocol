@@ -241,8 +241,9 @@ class TableDetails
          delete rpdu;
       }
       void run_blackjack() {
-         // Loop forever on rounds
-         for (;;) {
+         is_running = true;
+         // Loop forever on rounds, until there are no players
+         while (players.size() + pending_players.size() > 0) {
             // Move all pending players in
             mtx.lock();
             for (auto player : pending_players) {
@@ -345,6 +346,7 @@ class TableDetails
                conn_to_state[player] = ENTER_BETS;
             }
          }
+         is_running = false;
       }
       PlayerInfo* getPlayerInfo(SSL* conn) {
          return player_info[conn];
@@ -385,7 +387,6 @@ class TableDetails
             return false;
          }
          if (!is_running) {
-            is_running = true;
             players.push_back(player);
             // Start the game thread here
             game_thread = std::thread(&TableDetails::run_blackjack,this);
