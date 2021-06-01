@@ -21,6 +21,48 @@ std::map<std::string, std::string> auth_credentials = {{"foo", "bar"}, {"sph77",
 std::map<SSL*, std::string> conn_to_user;
 std::map<SSL*, STATE> conn_to_state;
 
+void handle_broadcast(std::string port, std::string service_port) {
+   int sock;
+   struct sockaddr_in broadcastAddr;
+   struct sockaddr_in clientAddr;
+   socklen_t socklen = sizeof(struct sockaddr_in);
+   unsigned short broadcastPort;
+   char buffer[256];
+   int len;
+
+   broadcastPort = atoi(port.c_str());
+   if ((sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
+      fprintf(stderr, "Failure to create broadcast socket.\n");
+      exit(EXIT_FAILURE);
+   }
+
+   memset(&broadcastAddr, 0, sizeof(broadcastAddr));
+   broadcastAddr.sin_family = AF_INET;
+   broadcastAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+   broadcastAddr.sin_port = htons(broadcastPort);
+
+   if (bind(sock, (struct sockaddr *) &broadcastAddr, sizeof(broadcastAddr)) < 0) {
+      fprintf(stderr, "Unable to bind to socket.\n");
+      exit(EXIT_FAILURE);
+   }
+
+   for (;;) {
+      if ((len = recvfrom(sock, buffer, 255, 0, (sockaddr *)&clientAddr, &socklen)) < 0) {
+         fprintf(stderr, "Unable to receive from socket.\n");
+         exit(EXIT_FAILURE);
+      }
+      buffer[len] = '\0';
+      if (std::string(buffer) == "CBP") {
+         // Got a CBP client, send back service port
+         ssize_t str_len = service_port.length() + 1;
+         if (sendto(sock, service_port.c_str(), str_len, 0, (struct sockaddr *)&clientAddr, sizeof(clientAddr)) != str_len) {
+            fprintf(stderr, "Unable to broadcast back to client.\n");
+            exit(EXIT_FAILURE);
+         }
+      }
+   }
+}
+
 class AccountDetails
 {
    private:

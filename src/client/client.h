@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -8,9 +9,78 @@
 #include <iostream>
 #include <map>
 #include <mutex>
+#include <thread>
 #include <vector>
 
 #include "../protocol/pdu.h"
+
+void get_udp_datagram(int sock, char (*buffer)[256], bool * flag) {
+   unsigned int len;
+   struct sockaddr_storage server;
+   socklen_t socklen = sizeof(server);
+   std::string ip_port;
+   if ((len = recvfrom(sock, *buffer, 255, 0, (struct sockaddr*)&server, &socklen)) < 0) {
+      fprintf(stderr, "Unable to receive data.\n");
+      exit(EXIT_FAILURE);
+   }
+   std::string ip;
+   char ip_buffer[256];
+   switch (server.ss_family) {
+      case AF_INET:
+         {
+            in_addr sa = ((struct sockaddr_in*)&server)->sin_addr;
+            inet_ntop(AF_INET, &sa, ip_buffer, socklen);
+         }
+         break;
+      case AF_INET6:
+         {
+            in6_addr sa6 = ((struct sockaddr_in6*)&server)->sin6_addr;
+            inet_ntop(AF_INET6, &sa6, ip_buffer, socklen);
+         }
+         break;
+   }
+   ip = std::string(ip_buffer);
+   *buffer[len] = '\0';
+   ip_port = ip + "/" + std::string(*buffer);
+   strcpy(*buffer, ip_port.c_str());
+   *flag = true;
+}
+
+// Basic UDP broadcast algorithm taken from http://cs.baylor.edu/~donahoo/practical/CSockets/code/BroadcastSender.c
+std::string get_blackjack_server(std::string ip, std::string port) {
+   int sock;
+   struct sockaddr_in broadcastAddr;
+   unsigned short broadcastPort = atoi(port.c_str());
+   int broadcastPermission;
+   if ((sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
+      fprintf(stderr, "socket() failed\n");
+      exit(EXIT_FAILURE);
+   }
+   
+   broadcastPermission = 1;
+   if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (void *)&broadcastPermission, sizeof(broadcastPermission)) < 0) {
+      fprintf(stderr, "setsockopt() failed\n");
+      exit(EXIT_FAILURE);
+   }
+
+   memset(&broadcastAddr, 0, sizeof(broadcastAddr));
+   broadcastAddr.sin_family = AF_INET;
+   broadcastAddr.sin_addr.s_addr = inet_addr(ip.c_str());
+   broadcastAddr.sin_port = htons(broadcastPort);
+   char buffer[256];
+   memset(buffer, '\0', 256);
+   bool received = false;
+   std::thread recv_thread(get_udp_datagram, sock, &buffer, &received);
+   while (!received) {
+      if (sendto(sock, "CBP", 4, 0, (struct sockaddr *)&broadcastAddr, sizeof(broadcastAddr)) != 4) {
+         fprintf(stderr, "Unable to send correct amount of bytes.\n");
+         exit(EXIT_FAILURE);
+      }
+      sleep(3);
+   }
+   recv_thread.join();
+   return std::string(buffer);
+}
 
 PDU* parse_pdu_client(SSL* ssl) {
    ssize_t rc = 0;

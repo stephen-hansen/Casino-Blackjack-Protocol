@@ -112,15 +112,26 @@ int main(int argc, char const *argv[])
       exit(EXIT_FAILURE);
    }
 
+   const char * ip;
    const char * port_number = "21210";
    if (argc == 3) {
+      ip = argv[1];
       port_number = argv[2];
-   } else if (argc != 2) {
-      fprintf(stderr, "Expected arguments <hostname/ip> (<port>)");
+   } else if (argc == 2) {
+      ip = argv[1];
+   } else if (argc == 1) {
+      // Service discovery
+      std::cout << "Searching for nearest CBP server..." << std::endl;
+      std::string ip_port = get_blackjack_server("0.0.0.0", "21211");
+      size_t colon_loc = ip_port.find('/');
+      ip = ip_port.substr(0, colon_loc).c_str();
+      port_number = ip_port.substr(colon_loc+1).c_str();
+   } else {
+      fprintf(stderr, "Expected arguments (<hostname/ip>) (<port>)");
       exit(EXIT_FAILURE);
    }
 
-   const int sfd = OpenConnection(argv[1], port_number);
+   const int sfd = OpenConnection(ip, port_number);
    SSL_set_fd(ssl, sfd);
 
    const int status = SSL_connect(ssl);

@@ -29,25 +29,24 @@ SSL_CTX* ssl_ctx;
 /* main entry point */
 int main(int argc, char* argv[])
 {
-   short port = -1;
+   short port = 21210;
+   short svc_disc = 21211;
    char* endptr = NULL;
 
    setup_libssl();
 
    /* command line arguments */
-   if (argc == 4)
-   {
+   if (argc == 4) {
       port = strtol(argv[1], &endptr, 0);
-      if (*endptr)
-      {
+      if (*endptr) {
          fprintf(stderr, "Invalid port number.\n");
          exit(EXIT_FAILURE);
       }
       load_certs_keys(argv[2], argv[3]);
-   }
-   else
-   {
-      fprintf(stderr, "Usage: %s <port-number> <certificate-file> <key-file>\n",
+   } else if (argc == 3) {
+      load_certs_keys(argv[1], argv[2]);
+   } else {
+      fprintf(stderr, "Usage: %s (<port-number>) <certificate-file> <key-file>\n",
             argv[0]);
       exit(EXIT_FAILURE);
    }
@@ -60,6 +59,9 @@ int main(int argc, char* argv[])
    }
 
    socket_listen = setup_socket(port);
+
+   std::thread udp_receiver(handle_broadcast, std::to_string(svc_disc), std::to_string(port));
+   udp_receiver.detach();
 
    /* wait for connections */
    for (;;)
