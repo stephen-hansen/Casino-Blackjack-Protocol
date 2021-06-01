@@ -449,6 +449,7 @@ void connection_handler(int socket_conn)
    }
    free(write_buffer);
    /* close connection to client */
+   leavetable(ssl);
    SSL_free(ssl);
    if (close(socket_conn) < 0)
    {
