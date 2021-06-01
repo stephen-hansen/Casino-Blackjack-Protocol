@@ -335,9 +335,9 @@ void listen_to_server(SSL* ssl) {
          }
          uint8_t soft_value = chr_pdu->getSoftValue();
          uint8_t hard_value = chr_pdu->getHardValue();
-         if (soft_value == 21) {
+         if (soft_value == 21 && cards.size() == 2) {
             std::cout << " (blackjack)";
-         } else if (hard_value == 21) {
+         } else if (soft_value == 21 || hard_value == 21) {
             std::cout << " (21)";
          } else if (soft_value < 21 && soft_value != hard_value) {
             std::cout << " (soft " << std::to_string(soft_value) << ")";

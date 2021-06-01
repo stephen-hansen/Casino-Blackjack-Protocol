@@ -136,6 +136,9 @@ class PlayerInfo
       std::vector<CardPDU*> getHand() {
          return hand;
       }
+      bool isConnected() {
+         return !quit;
+      }
       void disconnect() {
          mtx.lock();
          quit = true;
@@ -300,7 +303,15 @@ class TableDetails
                      ssize_t len = rpdu->to_bytes(&write_buffer);
                      player_info[player]->write(write_buffer, len);
                      delete rpdu;
-                     std::this_thread::sleep_for(std::chrono::seconds(30));
+                     // This technically employs a busy wait, albeit it only runs at most 30 times...
+                     // Sorry about this. Not experienced with timeout-driven events.
+                     for (int k=0; k<30; k++) {
+                        std::this_thread::sleep_for(std::chrono::seconds(1));
+                        if (conn_to_state[player] == WAIT_FOR_DEALER || !(player_info[player]->isConnected())) {
+                           break;
+                        }
+                     }
+                     conn_to_state[player] = WAIT_FOR_DEALER;
                   }
                }
             }
