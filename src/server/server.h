@@ -151,6 +151,13 @@ class PlayerInfo
          }
          mtx.unlock();
       }
+      void setState(STATE st) {
+         mtx.lock();
+         if (!quit) {
+            conn_to_state[connection] = st;
+         }
+         mtx.unlock();
+      }
 };
 
 std::map<char, std::pair<uint8_t, uint8_t>> rank_to_values = {
@@ -213,6 +220,7 @@ class TableDetails
       uint8_t dealer_value = 0;
       std::thread game_thread;
       bool is_running = false;
+      bool is_available = true;
       uint8_t player_action_count = 0;
       std::map<SSL*,PlayerInfo*> player_info;
       uint8_t max_players = 5;
@@ -253,7 +261,7 @@ class TableDetails
                ssize_t len = rpdu->to_bytes(&write_buffer);
                player_info[player]->write(write_buffer, len);
                // Move player to ENTER_BETS
-               conn_to_state[player] = ENTER_BETS;
+               player_info[player]->setState(ENTER_BETS);
             }
             pending_players.clear();
             mtx.unlock();
@@ -267,17 +275,17 @@ class TableDetails
             for (auto player : players) {
                player_info[player]->clearHand();
                if (player_info[player]->getBet() > 0) {
-                  conn_to_state[player] = WAIT_FOR_TURN;
+                  player_info[player]->setState(WAIT_FOR_TURN);
                   number_of_players += 1;
                   hit(player);
                } else {
-                  conn_to_state[player] = IN_PROGRESS;
+                  player_info[player]->setState(IN_PROGRESS);
                }
             }
             if (number_of_players == 0) {
                // Immediately start new round
                for (auto player : players) {
-                  conn_to_state[player] = ENTER_BETS;
+                  player_info[player]->setState(ENTER_BETS);
                }
                continue;
             }
@@ -295,10 +303,10 @@ class TableDetails
             for (auto player : players) {
                if (player_info[player]->getBet() > 0) {
                   if (player_info[player]->getHand().size() == 2 && player_info[player]->getValue() == 21) {
-                     conn_to_state[player] = WAIT_FOR_DEALER;
+                     player_info[player]->setState(WAIT_FOR_DEALER);
                      broadcast("Player " + conn_to_user[player] + " has a natural blackjack! Skipping turn.\n\n");
                   } else {
-                     conn_to_state[player] = TURN;
+                     player_info[player]->setState(TURN);
                      broadcast("It is " + conn_to_user[player] + "'s turn.\n\n");
                      ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(3, 1, 2, "It is your turn!\n\n");
                      ssize_t len = rpdu->to_bytes(&write_buffer);
@@ -312,7 +320,7 @@ class TableDetails
                            break;
                         }
                      }
-                     conn_to_state[player] = WAIT_FOR_DEALER;
+                     player_info[player]->setState(WAIT_FOR_DEALER);
                   }
                }
             }
@@ -343,7 +351,7 @@ class TableDetails
             }
             // Dealer done, new round
             for (auto player : players) {
-               conn_to_state[player] = ENTER_BETS;
+               player_info[player]->setState(ENTER_BETS);
             }
          }
          is_running = false;
@@ -379,6 +387,13 @@ class TableDetails
       }
       bool add_player(SSL* player) {
          mtx.lock();
+         if (!is_available) {
+            ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(4, 1, 4, "Table is being closed.\n\n");
+            ssize_t len = rpdu->to_bytes(&write_buffer);
+            SSL_write(player, write_buffer, len);
+            mtx.unlock();
+            return false;
+         }
          if (players.size() + pending_players.size() == max_players) {
             ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(4, 1, 3, "Table provided is full, try again later.\n\n");
             ssize_t len = rpdu->to_bytes(&write_buffer);
@@ -386,6 +401,7 @@ class TableDetails
             mtx.unlock();
             return false;
          }
+         player_info[player] = new PlayerInfo(player);
          if (!is_running) {
             players.push_back(player);
             // Start the game thread here
@@ -393,27 +409,52 @@ class TableDetails
             conn_to_state[player] = ENTER_BETS;
             JoinTableResponsePDU* rpdu = new JoinTableResponsePDU(3, 1, 0, to_string());
             ssize_t len = rpdu->to_bytes(&write_buffer);
-            SSL_write(player, write_buffer, len);
+            player_info[player]->write(write_buffer, len);
          } else {
             conn_to_state[player] = IN_PROGRESS;
             pending_players.push_back(player); // Player joins in next round
             broadcast(conn_to_user[player] + " is joining in the next round.\n\n");
             ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(1, 1, 0, "Game in progress, please wait for next round.\n\n");
             ssize_t len = rpdu->to_bytes(&write_buffer);
-            SSL_write(player, write_buffer, len);
+            player_info[player]->write(write_buffer, len);
          }
-         player_info[player] = new PlayerInfo(player);
          mtx.unlock();
          return true;
+      }
+      void shutdown() {
+         mtx.lock();
+         for (auto player : players) {
+            PlayerInfo* pi = getPlayerInfo(player);
+            ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(4, 1, 4, "Table is being closed.\n\n");
+            ssize_t len = rpdu->to_bytes(&write_buffer);
+            pi->write(write_buffer, len);
+            pi->disconnect();
+            conn_to_state[player] = ACCOUNT;
+         }
+         players.clear();
+         for (auto player : pending_players) {
+            PlayerInfo* pi = getPlayerInfo(player);
+            ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(4, 1, 4, "Table is being closed.\n\n");
+            ssize_t len = rpdu->to_bytes(&write_buffer);
+            pi->write(write_buffer, len);
+            pi->disconnect();
+            conn_to_state[player] = ACCOUNT;
+         }
+         pending_players.clear();
+         mtx.unlock();
       }
       bool remove_player(SSL* player) {
          bool ret = false;
          mtx.lock();
          if (std::count(players.begin(), players.end(), player)) {
             players.erase(std::remove(players.begin(), players.end(), player), players.end());
+            PlayerInfo* pi = getPlayerInfo(player);
+            pi->disconnect();
             ret = true;
          } else if (std::count(pending_players.begin(), pending_players.end(), player)) {
             pending_players.erase(std::remove(pending_players.begin(), pending_players.end(), player), pending_players.end());
+            PlayerInfo* pi = getPlayerInfo(player);
+            pi->disconnect();
             ret = true;
          }
          mtx.unlock();
@@ -544,9 +585,8 @@ bool handle_updatebalance(PDU* p, SSL* conn) {
 void leavetable(SSL* conn) {
    uint32_t table_id = conn_to_table_id[conn];
    if (!(tables.find(table_id) == tables.end())) {
-      PlayerInfo* pi = tables[table_id]->getPlayerInfo(conn);
-      pi->disconnect();
       tables[table_id]->remove_player(conn);
+      conn_to_table_id.erase(conn);
       conn_to_state[conn] = ACCOUNT;
       ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 1, 0, "Left table.\n\n");
       char * write_buffer = (char *)malloc(4096);

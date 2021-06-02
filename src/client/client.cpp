@@ -370,6 +370,8 @@ int main(int argc, char const *argv[])
    len = quit_pdu->to_bytes(&write_buffer);
    SSL_write(ssl, write_buffer, len);
    delete quit_pdu;
+   CONNECTED = false;
+   listen.join();
    SSL_free(ssl);
    close(sfd);
    SSL_CTX_free(ctx);

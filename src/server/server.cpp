@@ -309,7 +309,18 @@ void connection_handler(int socket_conn)
          }
          RemoveTablePDU* rt_pdu = dynamic_cast<RemoveTablePDU*>(p);
          if (rt_pdu) {
-            // TODO
+            uint16_t table_id = rt_pdu->getTableID();
+            if (tables.find(table_id) != tables.end()) {
+               tables[table_id]->shutdown();
+               tables.erase(table_id);
+               ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 1, 0, "Successfully shut down table.\n\n");
+               ssize_t len = rpdu->to_bytes(&write_buffer);
+               SSL_write(ssl, write_buffer, len);
+            } else {
+               ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(4, 1, 2, "Table with ID does not exist.\n\n");
+               ssize_t len = rpdu->to_bytes(&write_buffer);
+               SSL_write(ssl, write_buffer, len);
+            }
             continue;
          }
          JoinTablePDU* jt_pdu = dynamic_cast<JoinTablePDU*>(p);

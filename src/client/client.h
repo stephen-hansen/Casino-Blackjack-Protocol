@@ -281,8 +281,10 @@ PDU* parse_pdu_client(SSL* ssl) {
    return pdu;
 };
 
+bool CONNECTED = true;
+
 void listen_to_server(SSL* ssl) {
-   for (;;) {
+   while (CONNECTED) {
       PDU * p = parse_pdu_client(ssl);
       // Check for ASCII response, valid at any state
       ASCIIResponsePDU* ar_pdu = dynamic_cast<ASCIIResponsePDU*>(p);
