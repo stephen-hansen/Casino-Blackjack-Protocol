@@ -1,0 +1,172 @@
+Stephen Hansen (sph77)
+CS 544, Spring 2021
+CBP: Casino Blackjack Protocol Implementation README
+
+Important files:
+
+- src/client/client.cpp - main code for client
+- src/client/client.h   - defines helper functions, classes for client
+- src/protocol/dfa.h    - contains an enum with all states
+- src/protocol/pdu.h    - all PDUs defined here as classes, with a method for encoding to bytes on each
+- src/server/server.cpp - main code for server
+- src/server/server.h   - defines helper functions, classes for server (primarily blackjack logic)
+- cert/cert.pem         - a certificate file to use when running the server, for TLS
+- cert/key.pem          - a key file to use when running the server, for TLS
+
+Building:
+
+This implementation was written in C++. You MUST have support for at least C++11
+in order for this to compile (I use some C++11 methods and C++11 range-based for loops).
+My local machine (Ubuntu) is running g++ (Ubuntu 9.3.0-17ubuntu1~20.04) 9.3.0 and is
+able to compile this program. I also tested this program on Tux and both client, server
+compile and run on Tux as well (Tux is also on g++ 9.3.0).
+
+I really cannot guarantee that this is going to run properly in Windows or any other
+non-Linux OS. I've tried to make the code OS-agnostic as much as possible but I cannot
+guarantee that it's fully compatible (my C++ experience is primarily for Linux). So,
+for the best experience, I suggest that you compile and run this on Tux. It also
+works well in WSL2, if you have that installed.
+
+A Makefile has been included that should help with building the client and server
+programs. You WILL need the OpenSSL libraries installed wherever you run this to
+compile the programs (I used OpenSSL for TLS support). On Ubuntu, I just installed
+the libssl-dev package via apt-get (sudo apt-get install libssl-dev). The Makefile
+will link in these libraries as -lssl -lcrypto. The OpenSSL libraries are already
+installed on Tux, which is another reason I recommend running this on Tux.
+
+To build the client, just specify "make client" in the same directory that the Makefile
+is contained in. Same goes for the server, just specify "make server". Here is the
+actual command run for compiling the server:
+g++ -oserver -pthread -g ./src/server/server.cpp -lssl -lcrypto
+
+And here is the actual command run for compiling the client:
+g++ -oclient -pthread ./src/client/client.cpp -lssl -lcrypto
+
+Do not move any of the files around, you will mess up the dependencies between header
+files otherwise.
+
+Running:
+
+The server can be run in one of two ways. The first way is to run without a port, as follows:
+./server <cert-file> <key-file>
+
+The server, running OpenSSL, needs a certificate file and a key file to run. An example cert file
+and example key file are included in the cert/ directory. You can run the server from this
+directory as follows:
+
+./server cert/cert.pem cert/key.pem
+
+Note that without a port specified, the server defaults to port 21210 (the "well-known" port).
+
+The second way to run the server is by specifying a port, as follows:
+./server <port> <cert-file> <key-file>
+
+So, for example, to run the server on port 1234, you would run
+./server 1234 cert/cert.pem cert/key.pem
+
+The client can be run in one of three ways. The first way is to run without a port and IP/hostname, i.e.:
+./client
+
+The client will use UDP broadcast to find a server and port to connect to (see extra credit). Give
+it a few seconds for the client to find the server.
+
+The second way is to run with just an IP or hostname, as:
+./client <ip/hostname>
+
+So for example, to connect to a server on your local machine, you could do:
+./client 127.0.0.1
+
+Or you could do
+./client localhost
+
+Note that the client will default to the well-known port 21210. So if you are running the server on
+a different port, this method will not work (the first and third methods should work though).
+
+The third way is to run with an IP/hostname and a port, as:
+./client <ip/hostname> <port>
+
+So to connect to a local server running at port 1234, you could do
+./client 127.0.0.1 1234
+
+If you want to quit out of the client, just enter CTRL+C or use the "quit" command.
+
+For the server, just use CTRL+C to shut it down.
+
+Usercodes and passwords:
+Three usernames and passwords are provided, hardcoded into the server implementation.
+You may login with any of these, they are as follows:
+- USERNAME: foo, PASSWORD: bar
+- USERNAME: sph77, PASSWORD: admin
+- USERNAME: kain, PASSWORD: itdepends
+
+You will be prompted on connection to the server for username, followed by password.
+
+Robustness analysis:
+
+I think, in its current state, my server should be hard to crack through fuzzing, though I
+definitely do not think it is completely uncrackable. The server establishes a separate thread
+for every connected client and responds to each PDU message based on the current DFA state
+between the server and client. Invalid messages cannot be run at certain states (for example, you
+cannot bet in the ACCOUNT state). Since the state is checked prior to responding to a request,
+the DFA validation should (in theory) prevent invalid commands from being run at the wrong states,
+providing a safeguard against non-adaptive and adaptive fuzzing.
+
+However, my server code is somewhat complex, and it's not entirely that simple to deal with the DFA.
+Since there is one read thread per client (and not threaded per each individual message), I can
+safely say that the client thread only deals with one message at any given time. However, there is
+multi-threading in that each blackjack table maintains its own game thread which determines turn
+order and advances the game progress. This thread can update the player's state due to events
+such as timeouts (to prevent a player from stalling game progress, if they haven't made a move
+during their turn). This raises some multithreading concerns in regard to the possibility that
+the player enters some state, another thread changes the player state, and the player executes a command
+at the wrong state. I've tried my best to prevent issues like this by wrapping the state update
+around a mutex lock per player, and in my testing of multiple games, this seems to work well but
+there might be some rare edge case where it fails. The blackjack game, as represented by the DFA, though,
+is a cycle that can only be traversed one way (ENTER_BETS -> WAIT_FOR_TURN -> TURN -> WAIT_FOR_DEALER ->
+ENTER_BETS), so, regardless, you are always making progress in the game (and never reversing course in the game).
+The mutex lock has ensured that the player, on leaving the game, is no longer counted in it; the player leaves
+the game, and disables their playing status in the game (stored in a PlayerInfo class as a Boolean flag). The
+blackjack game is then unable to alter the player state since this flag is disabled. So in general I
+think adaptive and non-adaptive fuzzing might be possible, but will be very rare edge cases that do not greatly
+affect game progress. I was able to test these two forms of fuzzing in my development, as the original
+client UI had no sense of state and I could issue any PDU I wanted at any given point in the game.
+
+Random fuzzing is trickier, and, while I don't think my server suffers from any issues with it, it definitely
+doesn't handle it great. On an unrecognized PDU header, the server terminates the connection. However,
+it is quite possible for a client to send a legitimate header, and then not send any of the required
+data afterward for said header (i.e. sending a VERSION PDU and then not sending the client version at the
+end). The server does a blocking read, and it will be stuck trying to read the version from the client, which
+the client fails to send anything afterwards. Although the server gets stuck with the client, this does not
+completely ruin the server. Since every client is handled in a separate thread by the server, the client
+thread for the bad client is stuck, but anyone else can still connect and communicate with the server.
+If the bad client makes it to a game, and then partially sends a PDU, the game will not be stuck as the
+timeouts running in the dedicated blackjack game thread will force the game to make progress (while
+the bad client makes no progress on its own thread). The only major problem I see here is that a large
+number of bad clients could connect to the server, causing it to create a ton of blocked threads and
+overall become less performant. With more time on this project, I think this could be resolved
+by implementing a timeout on read for the server, and kicking any clients after some certain timeout
+without a successful read. 
+
+Overall, I think my code is robust. I have tested adaptive/non-adaptive fuzzing through an earlier
+client UI that accepted any command and could send any PDU at any given state. I also have tested
+running multiple clients connected to the same server, engaged in different blackjack games or in
+the same game together. I have also tested clients disconnecting from the server or from games
+at different states, through both the "quit" command and by a forceful CTRL+C disconnect. Random
+fuzzing was sometimes accidentally tested through initial bugs in the PDU encoding functions. Overall
+my server has been able to handle all cases that I have tested and runs very well, but I cannot
+guarantee that it is "perfectly robust" for the reasons stated above.
+
+Extra Credit:
+
+I implemented the extra credit through UDP broadcast. The client, when run with no arguments,
+sends a UDP datagram over broadcast to port 21211 to all devices in the local network. The
+datagram contains the ASCII string "CBP". The server runs a separate thread to listen
+for UDP datagrams on port 21211. When the server receives the datagram containing "CBP", it
+sends back the service port (either "21210" or whatever you specify in the arguments) to
+the client via UDP. Once the client receives this UDP packet back, it connects to the
+sender's IP and uses the port sent via UDP as the service port to connect to over
+TLS TCP. More details on the extra credit are provided in the requirements document. In
+testing, this works only on local area networks, of course. I was able to run the server
+on one Tux node and then have the client automatically find and connect to it on another
+Tux node.
+
