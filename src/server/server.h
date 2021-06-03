@@ -345,9 +345,14 @@ class TableDetails
                      if (dealer_value > 21 || value > dealer_value) { // Dealer bust, or you beat the dealer
                         payout = (bet*payoff_high)/payoff_low;
                      } else if (dealer_value == value) { // Tie, or beat with blackjack
-                        if (value == 21 && player_info[player]->getHand().size() == 2 &&
-                              dealer_hand.size() > 2) {
-                           payout = (bet*payoff_high)/payoff_low;
+                        if (value == 21) {
+                           if (player_info[player]->getHand().size() == 2 && dealer_hand.size() > 2) {
+                              payout = (bet*payoff_high)/payoff_low; // Blackjack win
+                           } else if (dealer_hand.size() == 2 && player_info[player]->getHand().size() > 2) {
+                              payout = 0; // Dealer win by blackjack
+                           } else {
+                              payout = bet; // Tie
+                           }
                         } else {
                            payout = bet;
                         }
