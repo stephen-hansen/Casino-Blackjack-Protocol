@@ -545,7 +545,7 @@ class TabledataPDU: public PDU
          settings = s;
       }
       uint16_t getTableID() {
-         return table_id;
+         return ntohs(table_id);
       }
       std::string getSettings() {
          return settings;

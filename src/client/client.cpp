@@ -277,11 +277,10 @@ int main(int argc, char const *argv[])
             } while (!is_number(line));
             headers = "max-players:" + line + "\n";
             std::cout << "Enter number of decks: ";
-            std::getline(std::cin, line);
-            headers += "number-decks:" + line + "\n";
             do {
                std::getline(std::cin, line);
             } while (!is_number(line));
+            headers += "number-decks:" + line + "\n";
             std::cout << "Enter payoff ratio (two numbers, e.g. 3, then 2 for 3-2 payoff): ";
             do {
                std::getline(std::cin, line);

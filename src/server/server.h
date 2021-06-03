@@ -432,6 +432,7 @@ class TableDetails
             players.push_back(player);
             // Start the game thread here
             game_thread = std::thread(&TableDetails::run_blackjack,this);
+            game_thread.detach();
             conn_to_state[player] = ENTER_BETS;
             JoinTableResponsePDU* rpdu = new JoinTableResponsePDU(3, 1, 0, to_string());
             ssize_t len = rpdu->to_bytes(&write_buffer);
@@ -679,7 +680,7 @@ void addtable(std::string settings, SSL* conn) {
    tables[table_id] = new TableDetails(max_players, number_decks, payoff_high, payoff_low, bet_min, bet_max, hit_soft_17);
    next_table_id += 1;
    tables_lock.unlock();
-   AddTableResponsePDU* rpdu = new AddTableResponsePDU(2, 1, 4, htonl(table_id));
+   AddTableResponsePDU* rpdu = new AddTableResponsePDU(2, 1, 4, htons(table_id));
    char * write_buffer = (char *)malloc(4096);
    ssize_t len = rpdu->to_bytes(&write_buffer);
    SSL_write(conn, write_buffer, len);
@@ -920,7 +921,35 @@ PDU* parse_pdu_server(SSL* ssl) {
          // No additional parsing necessary
          pdu = new GetTablesPDU();
       } else if (command_code == 1) { // ADDTABLE
-         // TODO
+         // Parse up to double newline
+         char message_buf[1027];
+         int i = 0;
+         char c = '\0';
+         bool saw_newline = false;
+         while ((rc = SSL_read(ssl, &c, 1) > 0)) {
+            message_buf[i] = c;
+            i++;
+            if (c == '\n') {
+               if (saw_newline) {
+                  break;
+               } else {
+                  saw_newline = true;
+               }
+            } else {
+               saw_newline = false;
+            }
+
+            if (i == 1026) {
+               break;
+            }
+         }
+         // Successful message ends in \n and saw_newline
+         if (c == '\n' && saw_newline) {
+            // Terminate the message buffer
+            message_buf[i] = '\0';
+            // Convert to string, create pdu
+            pdu = new AddTablePDU(std::string(message_buf));
+         }
       } else if (command_code == 2) { // REMOVETABLE
          char message_buf[2];
          // Read in the table ID

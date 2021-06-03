@@ -288,7 +288,7 @@ void connection_handler(int socket_conn)
             for (std::map<uint16_t, TableDetails*>::iterator it = tables.begin(); it != tables.end(); it++) {
                uint16_t tid = it->first;
                std::string settings = it->second->to_string();
-               TabledataPDU* td = new TabledataPDU(htonl(tid), settings);
+               TabledataPDU* td = new TabledataPDU(htons(tid), settings);
                tabledata.push_back(td);
             }
             if (tabledata.size() == 0) {
