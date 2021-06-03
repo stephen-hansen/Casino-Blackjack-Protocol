@@ -32,13 +32,6 @@ SSL_CTX *InitSSL_CTX(void)
 
 int OpenConnection(const char *hostname, const char *port)
 {
-   struct hostent *host;
-   if ((host = gethostbyname(hostname)) == nullptr)
-   {
-      perror(hostname);
-      exit(EXIT_FAILURE);
-   }
-
    struct addrinfo hints = {0}, *addrs;
    hints.ai_family = AF_UNSPEC;
    hints.ai_socktype = SOCK_STREAM;
@@ -122,7 +115,7 @@ int main(int argc, char const *argv[])
    } else if (argc == 1) {
       // Service discovery
       std::cout << "Searching for nearest CBP server..." << std::endl;
-      std::string ip_port = get_blackjack_server("0.0.0.0", "21211");
+      std::string ip_port = get_blackjack_server("255.255.255.255", "21211");
       size_t colon_loc = ip_port.find('/');
       ip = ip_port.substr(0, colon_loc).c_str();
       port_number = ip_port.substr(colon_loc+1).c_str();
@@ -159,6 +152,7 @@ int main(int argc, char const *argv[])
    bool authenticated = false;
    std::string line;
    while (!authenticated) {
+      state = USERNAME;
       std::cout << "Enter username: ";
       std::getline(std::cin, line);
       line.append("\n");
@@ -171,6 +165,7 @@ int main(int argc, char const *argv[])
          fprintf(stderr, "Got an unexpected error from server.\n");
          exit(EXIT_FAILURE);
       }
+      state = PASSWORD;
       std::cout << "Enter password: ";
       std::getline(std::cin, line);
       line.append("\n");
@@ -186,6 +181,7 @@ int main(int argc, char const *argv[])
          authenticated = true;
       }
    }
+   state = ACCOUNT;
    // Start up a listening thread
    std::thread listen(listen_to_server,ssl);
    std::cout << "Available commands:" << std::endl;
@@ -225,6 +221,7 @@ int main(int argc, char const *argv[])
       }
       std::string command = tokens[0];
       if (command == "balance") {
+         // Run at any post-authentication state
          if (tokens.size() == 1) {
             GetBalancePDU *gb_pdu = new GetBalancePDU();
             ssize_t len = gb_pdu->to_bytes(&write_buffer);
@@ -234,6 +231,7 @@ int main(int argc, char const *argv[])
             std::cout << "expected: balance" << std::endl;
          }
       } else if (command == "adjust") {
+         // Run at any post-authentication state
          if (tokens.size() == 2) {
             std::string funds_str = tokens[1];
             int32_t funds = stoi(funds_str);
@@ -245,13 +243,16 @@ int main(int argc, char const *argv[])
             std::cout << "expected: adjust <funds>" << std::endl;
          }
       } else if (command == "quit") {
+         // Run at any post-authentication state
          if (tokens.size() == 1) {
             break;
          } else {
             std::cout << "expected: quit" << std::endl;
          }
       } else if (command == "list") {
-         if (tokens.size() == 1) {
+         if (state != ACCOUNT) {
+            std::cout << "Sorry, command not valid at current state." << std::endl;
+         } else if (tokens.size() == 1) {
             GetTablesPDU *send_pdu = new GetTablesPDU();
             ssize_t len = send_pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
@@ -260,9 +261,30 @@ int main(int argc, char const *argv[])
             std::cout << "expected: list" << std::endl;
          }
       } else if (command == "add") {
-         // TODO interactive
+         // Interactive prompt
+         if (state != ACCOUNT) {
+            std::cout << "Sorry, command not valid at current state." << std::endl;
+         } else if (tokens.size() == 1) {
+            std::string headers;
+            std::cout << "Enter max number of players: ";
+            std::getline(std::cin, line);
+            headers = "max-players:" + line + "\n";
+            std::cout << "Enter number of decks: ";
+            std::getline(std::cin, line);
+            headers += "number-decks:" + line + "\n";
+            std::cout << "Enter payoff (ex: 3-2, 6-5): ";
+            std::getline(std::cin, line);
+            headers += "payoff:" + line + "\n";
+            std::cout << "Enter minimum bet: ";
+            std::getline(std::cin, line);
+            //headers += "bet-limits:
+         } else {
+            std::cout << "expected: add" << std::endl;
+         }
       } else if (command == "remove") {
-         if (tokens.size() == 2) {
+         if (state != ACCOUNT) {
+            std::cout << "Sorry, command not valid at current state." << std::endl;
+         } else if (tokens.size() == 2) {
             std::string id_str = tokens[1];
             uint16_t id = stoi(id_str);
             RemoveTablePDU *rt_pdu = new RemoveTablePDU(htons(id));
@@ -273,7 +295,9 @@ int main(int argc, char const *argv[])
             std::cout << "expected: remove <table id>" << std::endl;
          }
       } else if (command == "join") {
-         if (tokens.size() == 2) {
+         if (state != ACCOUNT) {
+            std::cout << "Sorry, command not valid at current state." << std::endl;
+         } else if (tokens.size() == 2) {
             std::string id_str = tokens[1];
             uint16_t id = stoi(id_str);
             JoinTablePDU *jt_pdu = new JoinTablePDU(htons(id));
@@ -284,7 +308,11 @@ int main(int argc, char const *argv[])
             std::cout << "expected: join <table id>" << std::endl;
          }
       } else if (command == "leave") {
-         if (tokens.size() == 1) {
+         if (state != ENTER_BETS && state != WAIT_FOR_TURN &&
+               state != TURN && state != WAIT_FOR_DEALER &&
+               state != IN_PROGRESS) {
+            std::cout << "Sorry, command not valid at current state." << std::endl;
+         } else if (tokens.size() == 1) {
             LeaveTablePDU *send_pdu = new LeaveTablePDU();
             ssize_t len = send_pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
@@ -293,7 +321,9 @@ int main(int argc, char const *argv[])
             std::cout << "expected: leave" << std::endl;
          }
       } else if (command == "bet") {
-         if (tokens.size() == 2) {
+         if (state != ENTER_BETS) {
+            std::cout << "Sorry, command not valid at current state." << std::endl;
+         } if (tokens.size() == 2) {
             std::string amt_str = tokens[1];
             uint32_t amt = stoi(amt_str);
             BetPDU *b_pdu = new BetPDU(htonl(amt));
@@ -304,7 +334,9 @@ int main(int argc, char const *argv[])
             std::cout << "expected: bet <amount>" << std::endl;
          }
       } else if (command == "hit") {
-         if (tokens.size() == 1) {
+         if (state != TURN) {
+            std::cout << "Sorry, command not valid at current state." << std::endl;
+         } else if (tokens.size() == 1) {
             HitPDU *send_pdu = new HitPDU();
             ssize_t len = send_pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
@@ -313,7 +345,9 @@ int main(int argc, char const *argv[])
             std::cout << "expected: hit" << std::endl;
          }
       } else if (command == "stand") {
-         if (tokens.size() == 1) {
+         if (state != TURN) {
+            std::cout << "Sorry, command not valid at current state." << std::endl;
+         } else if (tokens.size() == 1) {
             StandPDU *send_pdu = new StandPDU();
             ssize_t len = send_pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
@@ -322,7 +356,9 @@ int main(int argc, char const *argv[])
             std::cout << "expected: stand" << std::endl;
          }
       } else if (command == "double") {
-         if (tokens.size() == 1) {
+         if (state != TURN) {
+            std::cout << "Sorry, command not valid at current state." << std::endl;
+         } else if (tokens.size() == 1) {
             DoubleDownPDU *send_pdu = new DoubleDownPDU();
             ssize_t len = send_pdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
@@ -331,7 +367,11 @@ int main(int argc, char const *argv[])
             std::cout << "expected: double" << std::endl;
          }
       } else if (command == "chat") {
-         if (tokens.size() > 1) {
+         if (state != ENTER_BETS && state != WAIT_FOR_TURN &&
+               state != TURN && state != WAIT_FOR_DEALER &&
+               state != IN_PROGRESS) {
+            std::cout << "Sorry, command not valid at current state." << std::endl;
+         } else if (tokens.size() > 1) {
             std::string msg = "";
             std::vector<std::string>::iterator it = tokens.begin();
             std::advance(it, 1);

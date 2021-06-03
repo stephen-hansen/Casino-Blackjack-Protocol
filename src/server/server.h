@@ -89,12 +89,6 @@ class AccountDetails
 
 std::map<std::string, AccountDetails*> user_info;
 
-enum SurrenderOptions {
-   NONE,
-   LATE,
-   EARLY
-};
-
 class PlayerInfo
 {
    SSL* connection;
@@ -279,7 +273,14 @@ class TableDetails
                   number_of_players += 1;
                   hit(player);
                } else {
+                  ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(1, 1, 7, "Timeout elapsed, please wait for next round.\n\n");
+                  ssize_t len = rpdu->to_bytes(&write_buffer);
+                  player_info[player]->write(write_buffer, len);
                   player_info[player]->setState(IN_PROGRESS);
+                  mtx.lock();
+                  pending_players.push_back(player);
+                  players.erase(std::remove(players.begin(), players.end(), player), players.end());
+                  mtx.unlock();
                }
             }
             if (number_of_players == 0) {
@@ -320,7 +321,13 @@ class TableDetails
                            break;
                         }
                      }
-                     player_info[player]->setState(WAIT_FOR_DEALER);
+                     if (conn_to_state[player] != WAIT_FOR_DEALER) {
+                        player_info[player]->setState(WAIT_FOR_DEALER);
+                        // Send warning of timeout
+                        ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(1, 1, 7, "Timeout elapsed.\n\n");
+                        ssize_t len = rpdu->to_bytes(&write_buffer);
+                        player_info[player]->write(write_buffer, len);
+                     }
                   }
                }
             }
@@ -337,14 +344,19 @@ class TableDetails
                   if (value <= 21) { // Did not bust
                      if (dealer_value > 21 || value > dealer_value) { // Dealer bust, or you beat the dealer
                         payout = (bet*payoff_high)/payoff_low;
-                     } else if (dealer_value == value) { // Tie
-                        payout = bet;
+                     } else if (dealer_value == value) { // Tie, or beat with blackjack
+                        if (value == 21 && player_info[player]->getHand().size() == 2 &&
+                              dealer_hand.size() > 2) {
+                           payout = (bet*payoff_high)/payoff_low;
+                        } else {
+                           payout = bet;
+                        }
                      }
                   }
                   // Update balance
                   player_info[player]->setBet(0);
                   user_info[conn_to_user[player]]->adjustBalance(payout);
-                  WinningsResponsePDU* win_pdu = new WinningsResponsePDU(3,1,3,htonl(payout));
+                  WinningsResponsePDU* win_pdu = new WinningsResponsePDU(3,1,4,htonl(payout));
                   ssize_t len = win_pdu->to_bytes(&write_buffer);
                   player_info[player]->write(write_buffer, len);
                }
@@ -478,7 +490,7 @@ class TableDetails
          deck = cards;
          return true;
       }
-      bool hit(SSL* player) {
+      bool hit(SSL* player, bool dbl=false) {
          mtx.lock();
          bool ret = true;
          if (deck.size() == 0) {
@@ -492,6 +504,9 @@ class TableDetails
          uint8_t value = get_value(soft_value, hard_value);
          player_info[player]->setValue(value);
          uint8_t rc3 = 1;
+         if (dbl) {
+            rc3 = 3;
+         }
          if (value == 21) {
             if (player_hand.size() == 2) {
                rc3 = 4;
@@ -588,7 +603,7 @@ void leavetable(SSL* conn) {
       tables[table_id]->remove_player(conn);
       conn_to_table_id.erase(conn);
       conn_to_state[conn] = ACCOUNT;
-      ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 1, 0, "Left table.\n\n");
+      ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 1, 5, "Left table.\n\n");
       char * write_buffer = (char *)malloc(4096);
       ssize_t len = rpdu->to_bytes(&write_buffer);
       SSL_write(conn, write_buffer, len);
@@ -665,7 +680,7 @@ bool handle_doubledown(PDU* p, SSL* conn) {
       }
       pi->setBet(orig_bet*2);
       user_info[conn_to_user[conn]]->adjustBalance(-orig_bet);
-      tables[table_id]->hit(conn);
+      tables[table_id]->hit(conn, true);
       conn_to_state[conn] = WAIT_FOR_DEALER;
    }
    return true;

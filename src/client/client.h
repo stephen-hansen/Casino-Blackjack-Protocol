@@ -12,7 +12,10 @@
 #include <thread>
 #include <vector>
 
+#include "../protocol/dfa.h"
 #include "../protocol/pdu.h"
+
+STATE state = VERSION;
 
 void get_udp_datagram(int sock, char (*buffer)[256], bool * flag) {
    unsigned int len;
@@ -275,6 +278,64 @@ PDU* parse_pdu_client(SSL* ssl) {
          message_buf[i] = '\0';
          // Convert to string, create pdu
          pdu = new ASCIIResponsePDU(rc1,rc2,rc3,std::string(message_buf));
+      }
+   }
+   // State transition handler
+   if (state == ACCOUNT) {
+      if (rc1 == 1 && rc2 == 1 && rc3 == 0) {
+         state = IN_PROGRESS;
+      } else if (rc1 == 3 && rc2 == 1 && rc3 == 0) {
+         state = ENTER_BETS;
+      }
+   } else if (state == IN_PROGRESS) {
+      if (rc1 == 3 && rc2 == 1 && rc3 == 0) {
+         state = ENTER_BETS;
+      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
+         state = ACCOUNT;
+      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
+         state = ACCOUNT;
+      }
+   } else if (state == ENTER_BETS) {
+      if (rc1 == 2 && rc2 == 1 && rc3 == 0) {
+         state = WAIT_FOR_TURN;
+      } else if (rc1 == 1 && rc2 == 1 && rc3 == 7) {
+         state = IN_PROGRESS;
+      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
+         state = ACCOUNT;
+      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
+         state = ACCOUNT;
+      }
+   } else if (state == WAIT_FOR_TURN) {
+      if (rc1 == 1 && rc2 == 1 && rc3 == 4) {
+         state = WAIT_FOR_DEALER;
+      } else if (rc1 == 3 && rc2 == 1 && rc3 == 2) {
+         state = TURN;
+      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
+         state = ACCOUNT;
+      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
+         state = ACCOUNT;
+      }
+   } else if (state == TURN) {
+      if (rc1 == 2 && rc2 == 1 && rc3 == 0) {
+         state = WAIT_FOR_DEALER;
+      } else if (rc1 == 1 && rc2 == 1) {
+         if (rc3 == 2 || rc3 == 3 || rc3 == 6 || rc3 == 7) {
+            state = WAIT_FOR_DEALER;
+         }
+      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
+         state = ACCOUNT;
+      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
+         state = ACCOUNT;
+      }
+   } else if (state == WAIT_FOR_DEALER) {
+      if (rc1 == 3 && rc2 == 1 && rc3 == 3) {
+         state = ENTER_BETS;
+      } else if (rc1 == 3 && rc2 == 1 && rc3 == 4) {
+         state = ENTER_BETS;
+      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
+         state = ACCOUNT;
+      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
+         state = ACCOUNT;
       }
    }
 
