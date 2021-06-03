@@ -85,6 +85,66 @@ std::string get_blackjack_server(std::string ip, std::string port) {
    return std::string(buffer);
 }
 
+void handle_state_transition(uint8_t rc1, uint8_t rc2, uint8_t rc3) {
+   if (state == ACCOUNT) {
+      if (rc1 == 1 && rc2 == 1 && rc3 == 0) {
+         state = IN_PROGRESS;
+      } else if (rc1 == 3 && rc2 == 1 && rc3 == 0) {
+         state = ENTER_BETS;
+      }
+   } else if (state == IN_PROGRESS) {
+      if (rc1 == 3 && rc2 == 1 && rc3 == 0) {
+         state = ENTER_BETS;
+      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
+         state = ACCOUNT;
+      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
+         state = ACCOUNT;
+      }
+   } else if (state == ENTER_BETS) {
+      if (rc1 == 2 && rc2 == 1 && rc3 == 0) {
+         state = WAIT_FOR_TURN;
+      } else if (rc1 == 1 && rc2 == 1 && rc3 == 7) {
+         state = IN_PROGRESS;
+      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
+         state = ACCOUNT;
+      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
+         state = ACCOUNT;
+      }
+   } else if (state == WAIT_FOR_TURN) {
+      if (rc1 == 1 && rc2 == 1 && rc3 == 4) {
+         state = WAIT_FOR_DEALER;
+      } else if (rc1 == 3 && rc2 == 1 && rc3 == 2) {
+         state = TURN;
+      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
+         state = ACCOUNT;
+      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
+         state = ACCOUNT;
+      }
+   } else if (state == TURN) {
+      if (rc1 == 2 && rc2 == 1 && rc3 == 0) {
+         state = WAIT_FOR_DEALER;
+      } else if (rc1 == 1 && rc2 == 1) {
+         if (rc3 == 2 || rc3 == 3 || rc3 == 6 || rc3 == 7) {
+            state = WAIT_FOR_DEALER;
+         }
+      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
+         state = ACCOUNT;
+      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
+         state = ACCOUNT;
+      }
+   } else if (state == WAIT_FOR_DEALER) {
+      if (rc1 == 3 && rc2 == 1 && rc3 == 3) {
+         state = ENTER_BETS;
+      } else if (rc1 == 3 && rc2 == 1 && rc3 == 4) {
+         state = ENTER_BETS;
+      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
+         state = ACCOUNT;
+      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
+         state = ACCOUNT;
+      }
+   }
+}
+
 PDU* parse_pdu_client(SSL* ssl) {
    ssize_t rc = 0;
    char header_buf[3];
@@ -281,64 +341,7 @@ PDU* parse_pdu_client(SSL* ssl) {
       }
    }
    // State transition handler
-   if (state == ACCOUNT) {
-      if (rc1 == 1 && rc2 == 1 && rc3 == 0) {
-         state = IN_PROGRESS;
-      } else if (rc1 == 3 && rc2 == 1 && rc3 == 0) {
-         state = ENTER_BETS;
-      }
-   } else if (state == IN_PROGRESS) {
-      if (rc1 == 3 && rc2 == 1 && rc3 == 0) {
-         state = ENTER_BETS;
-      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
-         state = ACCOUNT;
-      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
-         state = ACCOUNT;
-      }
-   } else if (state == ENTER_BETS) {
-      if (rc1 == 2 && rc2 == 1 && rc3 == 0) {
-         state = WAIT_FOR_TURN;
-      } else if (rc1 == 1 && rc2 == 1 && rc3 == 7) {
-         state = IN_PROGRESS;
-      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
-         state = ACCOUNT;
-      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
-         state = ACCOUNT;
-      }
-   } else if (state == WAIT_FOR_TURN) {
-      if (rc1 == 1 && rc2 == 1 && rc3 == 4) {
-         state = WAIT_FOR_DEALER;
-      } else if (rc1 == 3 && rc2 == 1 && rc3 == 2) {
-         state = TURN;
-      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
-         state = ACCOUNT;
-      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
-         state = ACCOUNT;
-      }
-   } else if (state == TURN) {
-      if (rc1 == 2 && rc2 == 1 && rc3 == 0) {
-         state = WAIT_FOR_DEALER;
-      } else if (rc1 == 1 && rc2 == 1) {
-         if (rc3 == 2 || rc3 == 3 || rc3 == 6 || rc3 == 7) {
-            state = WAIT_FOR_DEALER;
-         }
-      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
-         state = ACCOUNT;
-      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
-         state = ACCOUNT;
-      }
-   } else if (state == WAIT_FOR_DEALER) {
-      if (rc1 == 3 && rc2 == 1 && rc3 == 3) {
-         state = ENTER_BETS;
-      } else if (rc1 == 3 && rc2 == 1 && rc3 == 4) {
-         state = ENTER_BETS;
-      } else if (rc1 == 2 && rc2 == 1 && rc3 == 5) {
-         state = ACCOUNT;
-      } else if (rc1 == 4 && rc2 == 1 && rc3 == 4) {
-         state = ACCOUNT;
-      }
-   }
-
+   handle_state_transition(rc1,rc2,rc3);
    return pdu;
 };
 
