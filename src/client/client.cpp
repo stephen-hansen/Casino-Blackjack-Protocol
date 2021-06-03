@@ -94,6 +94,11 @@ void DisplayCerts(SSL *ssl)
    }
 }
 
+// Source: https://stackoverflow.com/questions/4654636/how-to-determine-if-a-string-is-a-number-with-c
+bool is_number(const std::string& s) {
+   return !s.empty() && std::find_if(s.begin(), s.end(), [](unsigned char c) { return !std::isdigit(c); }) == s.end();
+}
+
 int main(int argc, char const *argv[])
 {
    char * write_buffer = (char*)malloc(4096);
@@ -267,17 +272,49 @@ int main(int argc, char const *argv[])
          } else if (tokens.size() == 1) {
             std::string headers;
             std::cout << "Enter max number of players: ";
-            std::getline(std::cin, line);
+            do {
+               std::getline(std::cin, line);
+            } while (!is_number(line));
             headers = "max-players:" + line + "\n";
             std::cout << "Enter number of decks: ";
             std::getline(std::cin, line);
             headers += "number-decks:" + line + "\n";
-            std::cout << "Enter payoff (ex: 3-2, 6-5): ";
-            std::getline(std::cin, line);
-            headers += "payoff:" + line + "\n";
+            do {
+               std::getline(std::cin, line);
+            } while (!is_number(line));
+            std::cout << "Enter payoff ratio (two numbers, e.g. 3, then 2 for 3-2 payoff): ";
+            do {
+               std::getline(std::cin, line);
+            } while (!is_number(line));
+            headers += "payoff:" + line;
+            std::cout << "Enter second number: ";
+            do {
+               std::getline(std::cin, line);
+            } while (!is_number(line));
+            headers += "-" + line + "\n";
             std::cout << "Enter minimum bet: ";
+            do {
+               std::getline(std::cin, line);
+            } while (!is_number(line));
+            headers += "bet-limits:" + line;
+            std::cout << "Enter maximum bet: ";
+            do {
+               std::getline(std::cin, line);
+            } while (!is_number(line));
+            headers += "-" + line + "\n";
+            std::cout << "Hit soft 17? (yes/[no]): ";
             std::getline(std::cin, line);
-            //headers += "bet-limits:
+            headers += "hit-soft-17:";
+            if (line == "yes") {
+               headers += "true";
+            } else {
+               headers += "false";
+            }
+            headers += "\n\n";
+            AddTablePDU *send_pdu = new AddTablePDU(headers);
+            ssize_t len = send_pdu->to_bytes(&write_buffer);
+            SSL_write(ssl, write_buffer, len);
+            delete send_pdu;
          } else {
             std::cout << "expected: add" << std::endl;
          }

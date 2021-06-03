@@ -229,6 +229,15 @@ class TableDetails
       std::default_random_engine rng = std::default_random_engine { rd() };
    public:
       TableDetails() {}
+      TableDetails(uint8_t max_players_, uint8_t number_decks_, uint8_t payoff_high_,
+            uint8_t payoff_low_, uint16_t bet_min_, uint16_t bet_max_, bool hit_soft_17_) :
+         max_players(max_players_),
+         number_decks(number_decks_),
+         payoff_high(payoff_high_),
+         payoff_low(payoff_low_),
+         bet_min(bet_min_),
+         bet_max(bet_max_),
+         hit_soft_17(hit_soft_17_) { }
       ~TableDetails() {
          free(write_buffer);
       }
@@ -476,7 +485,6 @@ class TableDetails
          }
          mtx.unlock();
          broadcast(conn_to_user[player] + " has left! Bye!\n\n");
-         // TODO shutdown thread if no one playing 
          return ret;
       }
       bool init_deck() {
@@ -570,6 +578,8 @@ class TableDetails
       }
 };
 
+std::mutex tables_lock;
+uint16_t next_table_id = 1;
 std::map<uint16_t, TableDetails*> tables = {{0, new TableDetails()}}; 
 std::map<SSL*, uint16_t> conn_to_table_id;
 
@@ -599,6 +609,89 @@ bool handle_updatebalance(PDU* p, SSL* conn) {
    ssize_t len = rpdu->to_bytes(&write_buffer);
    SSL_write(conn, write_buffer, len);
    free(write_buffer);
+   return true;
+}
+
+void addtable(std::string settings, SSL* conn) {
+   std::string headers = settings.substr(0, settings.length()-1); // Cut off trailing \n
+   std::string line;
+   size_t pos1;
+   uint8_t max_players = 5;
+   uint8_t number_decks = 8;
+   uint8_t payoff_high = 3;
+   uint8_t payoff_low = 2;
+   uint16_t bet_min = 25;
+   uint16_t bet_max = 1000;
+   bool hit_soft_17 = true;
+   while ((pos1 = headers.find("\n")) != std::string::npos) {
+      line = headers.substr(0, pos1);
+      size_t pos2 = line.find(":");
+      if (pos2 != std::string::npos) {
+         std::string header = line.substr(0, pos2);
+         std::string value = line.substr(pos2+1);
+         if (header == "max-players") {
+            uint8_t val = atoi(value.c_str());
+            if (val > 0) {
+               max_players = val;
+            }
+         } else if (header == "number-decks") {
+            uint8_t val = atoi(value.c_str());
+            if (val > 0) {
+               number_decks = val;
+            }
+         } else if (header == "payoff") {
+            size_t pos3 = value.find("-");
+            if (pos3 != std::string::npos) {
+               std::string v1 = value.substr(0, pos3);
+               std::string v2 = value.substr(pos3+1);
+               uint8_t val1 = atoi(v1.c_str());
+               uint8_t val2 = atoi(v2.c_str());
+               if (val1 > 0 && val2 > 0) {
+                  payoff_high = val1;
+                  payoff_low = val2;
+               }
+            }
+         } else if (header == "bet-limits") {
+            size_t pos3 = value.find("-");
+            if (pos3 != std::string::npos) {
+               std::string v1 = value.substr(0, pos3);
+               std::string v2 = value.substr(pos3+1);
+               uint8_t val1 = atoi(v1.c_str());
+               uint8_t val2 = atoi(v2.c_str());
+               if (val1 > 0 && val2 > 0) {
+                  bet_min = val1;
+                  bet_max = val2;
+               }
+            }
+         } else if (header == "hit-soft-17") {
+            if (value == "true") {
+               hit_soft_17 = true;
+            } else if (value == "false") {
+               hit_soft_17 = false;
+            }
+         }
+      }
+      headers.erase(0, pos1 + 1);
+   }
+   uint16_t table_id;
+   tables_lock.lock();
+   table_id = next_table_id;
+   tables[table_id] = new TableDetails(max_players, number_decks, payoff_high, payoff_low, bet_min, bet_max, hit_soft_17);
+   next_table_id += 1;
+   tables_lock.unlock();
+   AddTableResponsePDU* rpdu = new AddTableResponsePDU(2, 1, 4, htonl(table_id));
+   char * write_buffer = (char *)malloc(4096);
+   ssize_t len = rpdu->to_bytes(&write_buffer);
+   SSL_write(conn, write_buffer, len);
+   free(write_buffer);
+}
+
+bool handle_addtable(PDU* p, SSL* conn) {
+   AddTablePDU* pdu = dynamic_cast<AddTablePDU*>(p);
+   if (!pdu) {
+      return false;
+   }
+   addtable(pdu->getSettings(), conn);
    return true;
 }
 

@@ -302,17 +302,17 @@ void connection_handler(int socket_conn)
             }
             continue;
          }
-         AddTablePDU* at_pdu = dynamic_cast<AddTablePDU*>(p);
-         if (at_pdu) {
-            // TODO
+         if (handle_addtable(p, ssl)) {
             continue;
          }
          RemoveTablePDU* rt_pdu = dynamic_cast<RemoveTablePDU*>(p);
          if (rt_pdu) {
             uint16_t table_id = rt_pdu->getTableID();
             if (tables.find(table_id) != tables.end()) {
+               tables_lock.lock();
                tables[table_id]->shutdown();
                tables.erase(table_id);
+               tables_lock.unlock();
                ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 1, 0, "Successfully shut down table.\n\n");
                ssize_t len = rpdu->to_bytes(&write_buffer);
                SSL_write(ssl, write_buffer, len);
