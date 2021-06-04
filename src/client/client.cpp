@@ -239,11 +239,16 @@ int main(int argc, char const *argv[])
          // Run at any post-authentication state
          if (tokens.size() == 2) {
             std::string funds_str = tokens[1];
-            int32_t funds = stoi(funds_str);
-            UpdateBalancePDU *ub_pdu = new UpdateBalancePDU(htonl(funds));
-            ssize_t len = ub_pdu->to_bytes(&write_buffer);
-            SSL_write(ssl, write_buffer, len);
-            delete ub_pdu;
+            try {
+               int32_t funds = stoi(funds_str);
+               UpdateBalancePDU *ub_pdu = new UpdateBalancePDU(htonl(funds));
+               ssize_t len = ub_pdu->to_bytes(&write_buffer);
+               SSL_write(ssl, write_buffer, len);
+               delete ub_pdu;
+            }
+            catch (const std::out_of_range& oor) {
+               std::cout << "error, out of range" << std::endl;
+            }
          } else {
             std::cout << "expected: adjust <funds>" << std::endl;
          }
@@ -322,11 +327,16 @@ int main(int argc, char const *argv[])
             std::cout << "Sorry, command not valid at current state." << std::endl;
          } else if (tokens.size() == 2) {
             std::string id_str = tokens[1];
-            uint16_t id = stoi(id_str);
-            RemoveTablePDU *rt_pdu = new RemoveTablePDU(htons(id));
-            ssize_t len = rt_pdu->to_bytes(&write_buffer);
-            SSL_write(ssl, write_buffer, len);
-            delete rt_pdu;
+            try {
+               uint16_t id = stoi(id_str);
+               RemoveTablePDU *rt_pdu = new RemoveTablePDU(htons(id));
+               ssize_t len = rt_pdu->to_bytes(&write_buffer);
+               SSL_write(ssl, write_buffer, len);
+               delete rt_pdu;
+            }
+            catch (const std::out_of_range& oor) {
+               std::cout << "error, out of range" << std::endl;
+            }
          } else {
             std::cout << "expected: remove <table id>" << std::endl;
          }
@@ -335,11 +345,16 @@ int main(int argc, char const *argv[])
             std::cout << "Sorry, command not valid at current state." << std::endl;
          } else if (tokens.size() == 2) {
             std::string id_str = tokens[1];
-            uint16_t id = stoi(id_str);
-            JoinTablePDU *jt_pdu = new JoinTablePDU(htons(id));
-            ssize_t len = jt_pdu->to_bytes(&write_buffer);
-            SSL_write(ssl, write_buffer, len);
-            delete jt_pdu;
+            try {
+               uint16_t id = stoi(id_str);
+               JoinTablePDU *jt_pdu = new JoinTablePDU(htons(id));
+               ssize_t len = jt_pdu->to_bytes(&write_buffer);
+               SSL_write(ssl, write_buffer, len);
+               delete jt_pdu;
+            }
+            catch (const std::out_of_range& oor) {
+               std::cout << "error, out of range" << std::endl;
+            }
          } else {
             std::cout << "expected: join <table id>" << std::endl;
          }
@@ -361,11 +376,16 @@ int main(int argc, char const *argv[])
             std::cout << "Sorry, command not valid at current state." << std::endl;
          } if (tokens.size() == 2) {
             std::string amt_str = tokens[1];
-            uint32_t amt = stoi(amt_str);
-            BetPDU *b_pdu = new BetPDU(htonl(amt));
-            ssize_t len = b_pdu->to_bytes(&write_buffer);
-            SSL_write(ssl, write_buffer, len);
-            delete b_pdu;
+            try {
+               uint32_t amt = stoi(amt_str);
+               BetPDU *b_pdu = new BetPDU(htonl(amt));
+               ssize_t len = b_pdu->to_bytes(&write_buffer);
+               SSL_write(ssl, write_buffer, len);
+               delete b_pdu;
+            }
+            catch (const std::out_of_range& oor) {
+               std::cout << "error, out of range" << std::endl;
+            }
          } else {
             std::cout << "expected: bet <amount>" << std::endl;
          }

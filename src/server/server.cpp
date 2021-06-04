@@ -371,7 +371,6 @@ void connection_handler(int socket_conn)
          }
          BetPDU* b_pdu = dynamic_cast<BetPDU*>(p);
          if (b_pdu) {
-            conn_to_state[ssl] = WAIT_FOR_TURN;
             uint32_t amt = b_pdu->getBetAmount();
             if (amt > user_info[conn_to_user[ssl]]->getBalance()) {
                ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(5, 1, 0, "You do not have sufficient funds to make this bet.\n\n");
@@ -390,6 +389,7 @@ void connection_handler(int socket_conn)
             pi->setBet(amt);
             user_info[conn_to_user[ssl]]->adjustBalance(-amt);
             ASCIIResponsePDU* rpdu = new ASCIIResponsePDU(2, 1, 0, "Accepted bet, please wait for turn.\n\n");
+            conn_to_state[ssl] = WAIT_FOR_TURN;
             ssize_t len = rpdu->to_bytes(&write_buffer);
             SSL_write(ssl, write_buffer, len);
             continue;
