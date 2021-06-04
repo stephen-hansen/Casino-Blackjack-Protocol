@@ -156,6 +156,13 @@ fuzzing was sometimes accidentally tested through initial bugs in the PDU encodi
 my server has been able to handle all cases that I have tested and runs very well, but I cannot
 guarantee that it is "perfectly robust" for the reasons stated above.
 
+Video:
+
+There is a video of the protocol in action included as a .mp4 with this submission. The video
+time goes over 5 minutes, sorry about this but I wanted to make sure all aspects of the
+implementation were covered in sufficient detail. I spent many hours on this project and just
+wanted to showcase everything that I have accomplished.
+
 Extra Credit:
 
 I implemented the extra credit through UDP broadcast. The client, when run with no arguments,
