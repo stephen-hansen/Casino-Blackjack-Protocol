@@ -79,6 +79,11 @@ So for example, to connect to a server on your local machine, you could do:
 Or you could do
 ./client localhost
 
+On tux you can do
+./client tux<i>
+
+to connect to a specific tux node (i.e. tux1, tux2, tux3, etc.).
+
 Note that the client will default to the well-known port 21210. So if you are running the server on
 a different port, this method will not work (the first and third methods should work though).
 
